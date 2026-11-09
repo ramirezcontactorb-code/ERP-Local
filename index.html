@@ -428,7 +428,47 @@ tbody tr:hover td,table tr:hover>td:not([colspan]){background-color:color-mix(in
 <div id="print"></div>
 <div id="toast"></div>
 <div id="vtip" hidden></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
+/* ================= SUPABASE (base de datos en la nube) =================
+   Pega aquí los datos de tu proyecto: Supabase → Project Settings → API.
+   Si quedan vacíos, la app guarda en el navegador como antes. */
+const SUPABASE_URL='';
+const SUPABASE_KEY='';
+const SUPA_TABLE='mr_docs';
+function supaStore(){
+  if(!SUPABASE_URL||!SUPABASE_KEY||!window.supabase)return null;
+  const cli=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+  const cache=new Map(),dl=new Map(),cl=new Map();let loaded=false;
+  const parentOf=pth=>pth.split('/').slice(0,-1).join('/');
+  const snapDoc=pth=>{const d=cache.get(pth);return {id:pth.split('/').pop(),exists:d!==undefined,data:()=>d,metadata:{fromCache:false,hasPendingWrites:false}};};
+  const snapCol=c=>{const docs=[...cache.keys()].filter(k=>parentOf(k)===c).sort().map(k=>({id:k.split('/').pop(),data:()=>cache.get(k)}));
+    return {docs,size:docs.length,empty:!docs.length,docChanges:()=>[],metadata:{fromCache:false,hasPendingWrites:false}};};
+  const notify=pth=>{if(!loaded)return;(dl.get(pth)||[]).forEach(f=>f(snapDoc(pth)));const c=parentOf(pth);(cl.get(c)||[]).forEach(f=>f(snapCol(c)));};
+  const errOf=e=>{const m=String(e&&e.message||e||'');const o=new Error(m);o.code=/permission|policy|denied|JWT|401|403/i.test(m)?'invalid_argument':/fetch|network|Failed/i.test(m)?'unavailable':'unknown';return o;};
+  const ready=(async()=>{
+    for(let from=0;;from+=1000){
+      const {data,error}=await cli.from(SUPA_TABLE).select('path,data').order('path').range(from,from+999);
+      if(error)throw errOf(error);
+      data.forEach(r=>cache.set(r.path,r.data));if(data.length<1000)break;}
+    loaded=true;
+    cli.channel('mr-docs').on('postgres_changes',{event:'*',schema:'public',table:SUPA_TABLE},pl=>{
+      const r=pl.new&&pl.new.path?pl.new:pl.old;if(!r||!r.path)return;
+      if(pl.eventType==='DELETE')cache.delete(r.path);else cache.set(r.path,pl.new.data);
+      notify(r.path);}).subscribe();
+  })();
+  const on=(map,key,fn,snap,err)=>{(map.get(key)||map.set(key,[]).get(key)).push(fn);
+    ready.then(()=>fn(snap(key))).catch(e=>err&&err(e));
+    return ()=>{const a=map.get(key)||[];const i=a.indexOf(fn);if(i>=0)a.splice(i,1);};};
+  return {
+    doc:pth=>({path:pth,id:pth.split('/').pop(),
+      get:async()=>{await ready;return snapDoc(pth);},
+      set:async body=>{const {error}=await cli.from(SUPA_TABLE).upsert({path:pth,parent:parentOf(pth),data:body,updated_at:new Date().toISOString()});
+        if(error)throw errOf(error);cache.set(pth,body);notify(pth);},
+      onSnapshot:(next,err)=>on(dl,pth,next,snapDoc,err)}),
+    collection:c=>({path:c,doc:id=>null,onSnapshot:(next,err)=>on(cl,c,next,snapCol,err)})
+  };
+}
 /* ================= ICONOS ================= */
 const ICONS={
   receipt:'<path d="M6 2h12v20l-3-2-3 2-3-2-3 2z"/><path d="M9 7h6M9 11h6M9 15h4"/>',
@@ -636,6 +676,7 @@ async function boot(){
   fixUsers(USERS);
   let st=null;
   try{if(window.claude&&typeof window.claude.use==='function')st=await window.claude.use('db');}catch(e){st=null;}
+  if(!st){try{st=supaStore();}catch(e){st=null;}}
   if(!st){MODE='local';READY=true;if(S.user)db=load(S.user.suc);render();return;}
   STORE=st;MODE='shared';subscribeAll();render();
   setTimeout(()=>{if(!READY)toast('La conexión está lenta. Los datos pueden tardar en aparecer.','err');},10000);

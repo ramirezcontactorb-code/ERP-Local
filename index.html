@@ -689,7 +689,9 @@ function subscribeAll(){
 }
 function fixUsers(l){
   if(!l.some(u=>u.rol==='admin')){(l.find(u=>u.u==='matias')||l[0]).rol='admin';}
-  l.forEach(u=>{if(!u.rol)u.rol='vendedor';if(u.rol!=='admin'&&!Array.isArray(u.perms))u.perms=PRESETS_P.vendedor.p.slice();});return l;
+  l.forEach(u=>{if(!u.rol)u.rol='vendedor';if(u.rol!=='admin'&&!Array.isArray(u.perms))u.perms=PRESETS_P.vendedor.p.slice();
+    if(!u.mvmig){const add=a=>{if(Array.isArray(a)&&a.includes('bmov')&&!a.includes('bvmov'))a.push('bvmov');};add(u.perms);if(u.ps&&typeof u.ps==='object')Object.values(u.ps).forEach(add);u.mvmig=1;}
+    if(!u.ctamig){const add=a=>{if(Array.isArray(a)&&a.includes('mayor')&&!a.includes('mcta'))a.push('mcta');};add(u.perms);if(u.ps&&typeof u.ps==='object')Object.values(u.ps).forEach(add);u.ctamig=1;}});return l;
 }
 /* une los datos que quedaron guardados solo en este navegador con los de la nube */
 function migrarLocal(){
@@ -769,8 +771,8 @@ function newCart(){return {items:{},env:{},desc:0,pago:'Efectivo',recibe:0};}
 S.cart=newCart();
 /* ================= PERMISOS POR USUARIO ================= */
 const PERMS=[
-  {g:'Ventas',items:[['venta','Venta Local'],['anular','Anular ventas'],['rend','Rendición'],['mayor','Venta mayorista y su rendición']]},
-  {g:'Bodega',items:[['bodega','Ver resumen de bodega'],['bmov','Movimientos e ingreso de carga'],['bedit','Modificar stock']]},
+  {g:'Ventas',items:[['venta','Venta Local'],['anular','Anular ventas'],['rend','Rendición'],['mayor','Venta mayorista y su rendición'],['mcta','Ver Cuenta Clientes (mayorista)']]},
+  {g:'Bodega',items:[['bodega','Ver resumen de bodega'],['bmov','Ingreso de carga'],['bvmov','Ver movimientos de bodega'],['bedit','Modificar stock']]},
   {g:'Configuración',items:[['precios','Cambiar precios'],['com','Comisión de vales'],['phist','Historial de precios'],['users','Usuarios y permisos (solo admin)'],['theme','Theme']]},
   {g:'Informes',items:[['inf','Informes de todas las sucursales']]},
 ];
@@ -778,10 +780,10 @@ const ALLP=PERMS.flatMap(g=>g.items.map(x=>x[0]));
 const OLDP=['binv','btrans','bmin'];
 const PRESETS_P={
   vendedor:{n:'Vendedor',p:['venta','rend','bodega']},
-  bodeguero:{n:'Bodeguero',p:['bodega','bmov','bedit']},
-  encargado:{n:'Encargado de local',p:['venta','anular','rend','mayor','bodega','bmov','bedit','precios','com','phist']},
+  bodeguero:{n:'Bodeguero',p:['bodega','bmov','bvmov','bedit']},
+  encargado:{n:'Encargado de local',p:['venta','anular','rend','mayor','mcta','bodega','bmov','bvmov','bedit','precios','com','phist']},
 };
-const VIEWP={venta:'venta',caja:'venta',rend:'rend',bres:'bodega',bmov:'bmov',bcarga:'bmov',may:'mayor',mrend:'mayor',mcta:'mayor',binv:'binv',brec:'binv',btrans:'btrans',bmin:'bmin',bedit:'bedit',config:'precios',penv:'precios',clientes:'precios',pmay:'precios',com:'com',phist:'phist',users:'users',colores:'theme',inf:'inf'};
+const VIEWP={venta:'venta',caja:'venta',rend:'rend',bres:'bodega',bmov:'bvmov',bcarga:'bmov',may:'mayor',mrend:'mayor',mcta:'mcta',binv:'binv',brec:'binv',btrans:'btrans',bmin:'bmin',bedit:'bedit',config:'precios',penv:'precios',clientes:'precios',pmay:'precios',com:'com',phist:'phist',users:'users',colores:'theme',inf:'inf'};
 const curUser=()=>S.user?USERS.find(u=>u.u.toLowerCase()===String(S.user.u).toLowerCase()):null;
 const GLOBALP=['users','theme','inf'];
 const LOCALP=()=>ALLP.filter(k=>!GLOBALP.includes(k));
@@ -876,7 +878,7 @@ function vHome(){
     <div class="menu">
       ${can('venta')||can('rend')?card(can('venta')?'venta':'rend','receipt','Venta Local','Venta del local y su rendición diaria.'):''}
       ${can('mayor')?card('may','users','Venta Mayorista','Ventas a mayoristas y su rendición con abonos.'):''}
-      ${can('bodega')||['bmov','bedit'].some(can)?card(can('bodega')?'bres':['bmov','bedit'].find(v=>canView(v)),'house','Control de bodega','Llenos, vacíos y movimientos.'):''}
+      ${can('bodega')||['bmov','bvmov','bedit'].some(can)?card(can('bodega')?'bres':['bcarga','bmov','bedit'].find(v=>canView(v)),'house','Control de bodega','Llenos, vacíos y movimientos.'):''}
       ${firstConf()?card('config','gear','Configuración','Precios, comisión de vales, usuarios y theme.'):''}
       ${card('inf','chart','Informes','Ventas, rendición y stock por sucursal y en total.')}
     </div>
@@ -1233,7 +1235,7 @@ function saveObs(){getRend(S.rfecha).obs=$('#robs').value;save();toast('Observac
 function vRend(){
   if(!MKEY()&&String(S.rfecha).includes('#'))S.rfecha=String(S.rfecha).slice(0,10);
   if(isM()&&!S.mrcli)return frame('Rendición Mayorista','may',null,`
-    <div class="rtop" style="flex-wrap:wrap"><span class="rtt">Rendición Mayorista · ${esc(S.user.suc)}</span><button class="btn sm no-print" onclick="go('may')">Venta Mayorista</button><button class="btn sm no-print" onclick="go('mcta')">Cuenta Clientes</button></div>
+    <div class="rtop" style="flex-wrap:wrap"><span class="rtt">Rendición Mayorista · ${esc(S.user.suc)}</span><button class="btn sm no-print" onclick="go('may')">Venta Mayorista</button>${canView('mcta')?`<button class="btn sm no-print" onclick="go('mcta')">Cuenta Clientes</button>`:''}</div>
     <div class="mrbar no-print"><div class="row"><span class="lbl">CLIENTE</span>${mrClientesSel()}</div></div>
     <p class="empty" style="padding:50px 20px;text-align:center">Cada cliente mayorista tiene su propia cuadratura.<br><b>Elige un cliente</b> arriba para ver o hacer su rendición.</p>
     <div class="rfoot no-print"><button class="btn" onclick="go('may')">Volver</button></div>`,true);
@@ -1247,7 +1249,7 @@ function vRend(){
   const row=(t,fn,cls='')=>`<tr class="${cls}"><td class="l"><b>${t}</b></td>${ps.map(p=>`<td class="${p.tipo==='c'?'cat':''}">${fn(p)}</td>`).join('')}</tr>`;
   const MY=isM();
   return frame(MY?'Rendición Mayorista':'Rendición',MY?'may':'home',null,`
-    <div class="rtop" style="flex-wrap:wrap"><span class="rtt">${MY?'Rendición Mayorista':'Rendición'} · ${esc(S.user.suc)}</span>${MY?`<span class="rtt mr-pcli" style="display:none">· ${esc(S.mrcli===MLEG?'Anteriores':S.mrcli)}${String(f).includes('#')?' · Venta N° '+Number(String(f).split('#')[1]):''}</span>`:''}${MY?`<button class="btn sm no-print" onclick="go('may')">Venta Mayorista</button><button class="btn sm no-print" onclick="go('mcta')">Cuenta Clientes</button>`:''}FECHA MOVIMIENTO &nbsp; Desde <input type="date" id="rf" value="${String(f).slice(0,10)}"> Hasta <input type="date" id="rf2" value="${S.rfecha2||''}">
+    <div class="rtop" style="flex-wrap:wrap"><span class="rtt">${MY?'Rendición Mayorista':'Rendición'} · ${esc(S.user.suc)}</span>${MY?`<span class="rtt mr-pcli" style="display:none">· ${esc(S.mrcli===MLEG?'Anteriores':S.mrcli)}${String(f).includes('#')?' · Venta N° '+Number(String(f).split('#')[1]):''}</span>`:''}${MY?`<button class="btn sm no-print" onclick="go('may')">Venta Mayorista</button>${canView('mcta')?`<button class="btn sm no-print" onclick="go('mcta')">Cuenta Clientes</button>`:''}`:''}FECHA MOVIMIENTO &nbsp; Desde <input type="date" id="rf" value="${String(f).slice(0,10)}"> Hasta <input type="date" id="rf2" value="${S.rfecha2||''}">
       <button class="btn sm" onclick="S.rfecha=$('#rf').value||today();S.rfecha2=$('#rf2').value;if(S.rfecha2===S.rfecha)S.rfecha2='';mrAuto();render()">Ver</button>
       ${m?`<button class="btn sm" onclick="S.rfecha2='';render()">Solo un día</button>`:''}</div>
     ${MY?`<div class="mrbar no-print"><div class="row"><span class="lbl">CLIENTE</span>${mrClientesSel()}</div>

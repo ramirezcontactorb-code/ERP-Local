@@ -218,6 +218,16 @@ textarea{width:100%;min-height:100px;resize:vertical}
 .modal{position:fixed;inset:0;background:rgba(16,24,40,.45);display:grid;place-items:center;z-index:60;padding:16px}
 .mbox{background:var(--card);border-radius:10px;padding:22px;width:100%;max-width:380px;display:flex;flex-direction:column;gap:14px;box-shadow:0 20px 40px rgba(16,24,40,.2)}
 .mbox p{margin:0;font-weight:600;font-size:15px}
+.mbox.ed{max-width:640px;max-height:90vh;overflow:auto}
+.edg{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.edc{border:1px solid var(--line,#e4e7ec);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:6px;align-items:center}
+.edc .t{font-weight:700;font-size:14px;color:var(--tx)}
+.edc .pm{display:flex;align-items:center;gap:6px}
+.edc .pm button{width:32px;height:32px;border-radius:8px;border:1px solid var(--line,#d0d5dd);background:var(--card);font-size:18px;font-weight:700;cursor:pointer;color:var(--tx)}
+.edc .pm input{width:58px;text-align:center;height:32px;font-size:15px;font-weight:700}
+.edc .sub{font-size:11.5px;color:var(--tx2);font-weight:500}
+.edtot{display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:16px;padding-top:4px;border-top:1px solid var(--line,#e4e7ec)}
+.mbox.ed .mbtns{display:flex;gap:8px;flex-wrap:wrap}
 .mbox label{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:500;color:var(--tx2)}
 .mbtns{display:flex;justify-content:flex-end;gap:8px}
 
@@ -525,6 +535,7 @@ const ICONS={
   tag:'<path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8z"/><circle cx="7" cy="7" r="1.5"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
   x:'<path d="M18 6L6 18M6 6l12 12"/>',
+  trash:'<path d="M3 6h18M8 6V4h8v2M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14M10 11v6M14 11v6"/>',
   gauge:'<path d="M12 14l4-4"/><path d="M3.3 19a10 10 0 1 1 17.4 0"/>',
   cyl:'<path d="M9 2h6v3H9z"/><path d="M7 5h10a3 3 0 0 1 3 3v11a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z"/><path d="M15 12a3 3 0 1 1-1-2.2"/><path d="M15 8.5v2h-2"/>',
   edit:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
@@ -981,10 +992,41 @@ function ventasHoyTbl(){
     <td class="r"><b>${money(v.total)}</b>${v.editada?`<div class="hint">editada</div>`:''}</td>
     <td class="no-print" style="white-space:nowrap">${v.anulada?'<span class="badge red">Anulada</span>':ed
       ?`<button class="btn primary sm" onclick="saveEditVenta(${v.id})">${ic('check')}Guardar</button> <button class="btn sm" onclick="S.vedit=null;render()">Cancelar</button>`
-      :`<button class="ib" title="Editar cantidades" onclick="S.vedit=${v.id};render()">${ic('edit')}</button>`}</td></tr>`;}).join('')
+      :`<button class="ib" title="Editar venta" onclick="editVentaM('l',${v.id})">${ic('edit')}</button> <button class="ib red" title="Eliminar venta" onclick="delVentaM('l',${v.id})">${ic('trash')}</button>`}</td></tr>`;}).join('')
     :`<tr><td colspan="${ps.length+5}" class="empty">Aún no hay ventas hoy</td></tr>`}
   </table></div>`;
 }
+/* ---- Editor de venta en ventana (local 'l' / mayorista 'm') ---- */
+function closeEdM(){const m=document.querySelector('.modal.edm');if(m)m.remove();}
+function delVentaM(k,id){
+  if(!can('anular'))return toast('No tienes permiso para eliminar ventas.','err');
+  const v=(k==='l'?db.ventas:db.mayor.ventas).find(x=>x.id===id);if(!v||v.anulada)return;
+  ask(`¿Eliminar la venta N° ${v.num}${v.cliente?' de '+v.cliente:''}? Los cilindros vuelven a bodega.`,()=>{closeEdM();
+    if(k==='l')anular(id,1);else anularMay(id,1);});
+}
+function editVentaM(k,id){
+  const L=k==='l',v=(L?db.ventas:db.mayor.ventas).find(x=>x.id===id);if(!v||v.anulada)return;
+  const ps=db.products,c=L?null:findCli(v.cliente);
+  const pr=pid=>v.precios[pid]!=null?v.precios[pid]:(L?precio(P(pid)):(c?precioCli(c,pid):precioBase(P(pid))));
+  const pe=pid=>(v.penv||{})[pid]!=null?v.penv[pid]:P(pid).envase;
+  const card=(attr,pid,val,label,sub)=>`<div class="edc"><div class="t">${label}</div>
+    <div class="pm"><button type="button" onclick="edStep(this,-1)">−</button><input class="ei" type="number" min="0" inputmode="numeric" placeholder="0" ${attr}="${pid}" value="${val||''}" oninput="edTot()"><button type="button" onclick="edStep(this,1)">+</button></div>
+    <div class="sub">${sub}</div></div>`;
+  const m=document.createElement('div');m.className='modal edm';
+  m.innerHTML=`<div class="mbox ed"><p>Editar venta N° ${v.num}${L?'':' · '+esc(v.cliente)} <span class="hint" style="font-weight:500">${dmy(v.fecha)} ${v.hora}</span></p>
+    <div class="edg">${ps.map(p=>card(L?'data-ei':'data-mei',p.id,v.items[p.id],'Cilindro '+colLbl(p),`Bodega: ${p.stock+(v.items[p.id]||0)}`)).join('')}</div>
+    ${L&&ps.some(p=>p.envase)?`<div class="hint" style="font-weight:600">Venta de envases</div><div class="edg">${ps.filter(p=>p.envase).map(p=>card('data-ee',p.id,(v.env||{})[p.id],'Envase '+colLbl(p),money(pe(p.id)))).join('')}</div>`:''}
+    <div class="edtot"><span>Total</span><span id="edtot"></span></div>
+    <div class="mbtns"><button class="btn danger" onclick="delVentaM('${k}',${v.id})">${ic('trash')}Eliminar venta</button><span style="flex:1"></span>
+      <button class="btn" onclick="closeEdM()">Cancelar</button><button class="btn primary" onclick="${L?'saveEditVenta':'saveEditMay'}(${v.id})">${ic('check')}Guardar cambios</button></div></div>`;
+  document.body.appendChild(m);
+  window.edTot=()=>{let t=0;m.querySelectorAll('[data-ei],[data-mei]').forEach(el=>t+=num(el.value)*pr(el.dataset.ei||el.dataset.mei));
+    m.querySelectorAll('[data-ee]').forEach(el=>t+=num(el.value)*pe(el.dataset.ee));if(L)t=Math.max(0,t-(v.desc||0));
+    m.querySelector('#edtot').textContent=money(t)+(L&&v.desc?` (desc. ${money(v.desc)})`:'');};
+  m.addEventListener('click',e=>{if(e.target===m)closeEdM();});
+  edTot();const fi=m.querySelector('input');if(fi)fi.focus();
+}
+function edStep(b,d){const i=b.parentNode.querySelector('input');i.value=Math.max(0,num(i.value)+d)||'';edTot();}
 function saveEditVenta(id){
   const v=db.ventas.find(x=>x.id===id);if(!v||v.anulada)return;
   const ni={},ne={};$$('[data-ei]').forEach(el=>{const n=num(el.value);if(n)ni[el.dataset.ei]=n;});$$('[data-ee]').forEach(el=>{const n=num(el.value);if(n)ne[el.dataset.ee]=n;});
@@ -997,7 +1039,7 @@ function saveEditVenta(id){
   v.penv=v.penv||{};for(const k in ne){if(v.penv[k]==null)v.penv[k]=P(k).envase;sub+=ne[k]*v.penv[k];}
   for(const g in vac)db.vacios[g]=(db.vacios[g]||0)+vac[g];
   v.items=ni;v.env=ne;v.vac=vac;v.total=Math.max(0,sub-(v.desc||0));v.editada={usuario:S.user.nombre,fecha:today(),hora:hora()};
-  S.vedit=null;save();toast('Venta N° '+v.num+' corregida ✔');render();
+  S.vedit=null;closeEdM();save();toast('Venta N° '+v.num+' corregida ✔');render();
 }
 function grabar(){
   const c=S.cart;
@@ -1457,7 +1499,7 @@ function vMay(){
       <td class="l" style="white-space:normal">${ed?ps.map(p=>`<label style="display:inline-flex;align-items:center;gap:4px;margin:2px 8px 2px 0"><b>${colLbl(p)}</b><input class="ei" style="width:56px;text-align:center" type="number" min="0" inputmode="numeric" placeholder="0" data-mei="${p.id}" value="${v.items[p.id]||''}"></label>`).join(''):qtyTxt(v)}${v.editada&&!ed?' <span class="hint">· editada</span>':''}</td><td>${esc(v.usuario)}</td>
       <td class="no-print" style="white-space:nowrap">${v.anulada?'<span class="badge red">Anulada</span>':ed
         ?`<button class="btn primary sm" onclick="saveEditMay(${v.id})">${ic('check')}Guardar</button> <button class="btn sm" onclick="S.medit=null;render()">Cancelar</button>`
-        :`<button class="ib" title="Editar cantidades" onclick="S.medit=${v.id};render()">${ic('edit')}</button> ${can('anular')?`<button class="btn sm danger" onclick="anularMay(${v.id})">Anular</button>`:''}`}</td></tr>`;}).join('')
+        :`<button class="ib" title="Editar venta" onclick="editVentaM('m',${v.id})">${ic('edit')}</button> <button class="ib red" title="Eliminar venta" onclick="delVentaM('m',${v.id})">${ic('trash')}</button>`}</td></tr>`;}).join('')
       :'<tr><td colspan="7" class="empty">Aún no hay ventas mayoristas</td></tr>'}
     </table></div>`);
 }
@@ -1470,7 +1512,7 @@ function saveEditMay(id){
   const c=findCli(v.cliente);let total=0;
   for(const k in ni){P(k).stock-=ni[k];if(v.canje)db.vacios[grp(k)]=(db.vacios[grp(k)]||0)+ni[k];if(v.precios[k]==null)v.precios[k]=c?precioCli(c,k):precioBase(P(k));total+=ni[k]*v.precios[k];}
   v.items=ni;v.total=total;v.editada={usuario:S.user.nombre,fecha:today(),hora:hora()};
-  S.medit=null;save();toast('Venta mayorista N° '+v.num+' corregida ✔');render();
+  S.medit=null;closeEdM();save();toast('Venta mayorista N° '+v.num+' corregida ✔');render();
 }
 function grabarMay(){
   const c=findCli($('#mcli').value);if(!c)return toast('Selecciona el cliente','err');

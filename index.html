@@ -1,4 +1,8 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MR Gas</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -424,6 +428,8 @@ tbody tr:hover td,table tr:hover>td:not([colspan]){background-color:color-mix(in
 .rtt{font-family:var(--f-disp)!important;font-weight:700!important;font-size:21px!important;letter-spacing:-.03em;color:var(--tx)}
 .panel:has(.rc){overflow:hidden}
 </style>
+</head>
+<body>
 <div id="app"></div>
 <div id="print"></div>
 <div id="toast"></div>
@@ -467,6 +473,39 @@ function supaStore(){
         if(error)throw errOf(error);cache.set(pth,body);notify(pth);},
       onSnapshot:(next,err)=>on(dl,pth,next,snapDoc,err)}),
     collection:c=>({path:c,doc:id=>null,onSnapshot:(next,err)=>on(cl,c,next,snapCol,err)})
+  };
+}
+/* ================= NEON (Vercel) =================
+   En Vercel la página guarda en Neon a través de /api/docs (archivo api/docs.js).
+   Además, siempre queda una copia en el navegador. */
+const API_DOCS='/api/docs';
+async function apiStore(){
+  if(!/^https?:$/.test(location.protocol))return null;
+  let first;
+  try{const r=await fetch(API_DOCS,{cache:'no-store'});if(!r.ok)return null;first=await r.json();if(!first||!Array.isArray(first.rows))return null;}catch(e){return null;}
+  const cache=new Map(),dl=new Map(),cl=new Map();let since=null;
+  const parentOf=pth=>pth.split('/').slice(0,-1).join('/');
+  const snapDoc=pth=>{const d=cache.get(pth);return {id:pth.split('/').pop(),exists:d!==undefined,data:()=>d,metadata:{fromCache:false,hasPendingWrites:false}};};
+  const snapCol=c=>{const docs=[...cache.keys()].filter(k=>parentOf(k)===c).sort().map(k=>({id:k.split('/').pop(),data:()=>cache.get(k)}));
+    return {docs,size:docs.length,empty:!docs.length,docChanges:()=>[],metadata:{fromCache:false,hasPendingWrites:false}};};
+  const notify=pth=>{(dl.get(pth)||[]).forEach(f=>f(snapDoc(pth)));const c=parentOf(pth);(cl.get(c)||[]).forEach(f=>f(snapCol(c)));};
+  const take=rows=>{const ch=[];rows.forEach(r=>{if(!since||r.updated_at>since)since=r.updated_at;const j=JSON.stringify(r.data);if(JSON.stringify(cache.get(r.path))!==j){cache.set(r.path,r.data);ch.push(r.path);}});return ch;};
+  take(first.rows);
+  const poll=async()=>{if(document.hidden)return;try{const r=await fetch(API_DOCS+(since?'?since='+encodeURIComponent(since):''),{cache:'no-store'});
+    if(!r.ok)return;const j=await r.json();take(j.rows||[]).forEach(notify);}catch(e){}};
+  setInterval(poll,4000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)poll();});
+  const on=(map,key,fn,snap)=>{(map.get(key)||map.set(key,[]).get(key)).push(fn);setTimeout(()=>fn(snap(key)),0);
+    return ()=>{const a=map.get(key)||[];const i=a.indexOf(fn);if(i>=0)a.splice(i,1);};};
+  const errOf=(m,st)=>{const o=new Error(m);o.code=st===401||st===403?'invalid_argument':st===413?'quota_exceeded':'unavailable';return o;};
+  return {
+    doc:pth=>({path:pth,id:pth.split('/').pop(),
+      get:async()=>snapDoc(pth),
+      set:async body=>{let r;try{r=await fetch(API_DOCS,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:pth,data:body})});}
+        catch(e){throw errOf(String(e),0);}
+        if(!r.ok){let m='';try{m=(await r.json()).error;}catch(e){}throw errOf(m||('Error '+r.status),r.status);}
+        cache.set(pth,body);notify(pth);},
+      onSnapshot:(next)=>on(dl,pth,next,snapDoc)}),
+    collection:c=>({path:c,doc:id=>null,onSnapshot:(next)=>on(cl,c,next,snapCol)})
   };
 }
 /* ================= ICONOS ================= */
@@ -677,6 +716,7 @@ async function boot(){
   let st=null;
   try{if(window.claude&&typeof window.claude.use==='function')st=await window.claude.use('db');}catch(e){st=null;}
   if(!st){try{st=supaStore();}catch(e){st=null;}}
+  if(!st){try{st=await apiStore();}catch(e){st=null;}}
   if(!st){MODE='local';READY=true;if(S.user)db=load(S.user.suc);render();return;}
   STORE=st;MODE='shared';subscribeAll();render();
   setTimeout(()=>{if(!READY)toast('La conexión está lenta. Los datos pueden tardar en aparecer.','err');},10000);
@@ -2025,5 +2065,5 @@ applyTheme(THEME);
 render();
 boot();
 </script>
-
-</body></html>
+</body>
+</html>

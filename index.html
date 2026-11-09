@@ -218,6 +218,16 @@ textarea{width:100%;min-height:100px;resize:vertical}
 .modal{position:fixed;inset:0;background:rgba(16,24,40,.45);display:grid;place-items:center;z-index:60;padding:16px}
 .mbox{background:var(--card);border-radius:10px;padding:22px;width:100%;max-width:380px;display:flex;flex-direction:column;gap:14px;box-shadow:0 20px 40px rgba(16,24,40,.2)}
 .mbox p{margin:0;font-weight:600;font-size:15px}
+.mrbar{display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;gap:4px 12px;margin:8px 12px 0;padding:4px 8px;border:1px solid var(--b2);border-left:3px solid var(--b6);border-radius:8px;background:var(--b1)}
+.mrbar .lbl{font-size:9.5px;font-weight:700;letter-spacing:.08em;color:var(--b8)}
+.mrbar .row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.mrbar select.big{font-size:12.5px;font-weight:700;height:27px;padding:0 6px;min-width:170px;max-width:100%;border:1px solid var(--b6);border-radius:7px;color:var(--b8);background:var(--card)}
+.mrbar .vch{font-size:11.5px;font-weight:700;padding:3px 8px;border-radius:7px;border:1px solid var(--b2);background:var(--card);color:var(--tx);cursor:pointer;line-height:1.15;white-space:nowrap}
+.mrbar .vch small{font-size:10px;font-weight:500;color:var(--tx2);margin-left:5px}
+.mrbar .vch.on{background:var(--b6);border-color:var(--b6);color:#fff}
+.mrbar .vch.on small{color:#fff;opacity:.85}
+.mrbar .vch.an{opacity:.55;text-decoration:line-through}
+@media (max-width:600px){.mrbar select.big{min-width:0;flex:1}.mrbar .row{width:100%}}
 .mbox.ed{max-width:640px;max-height:90vh;overflow:auto}
 .edg{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
 .edc{border:1px solid var(--line,#e4e7ec);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:6px;align-items:center}
@@ -743,7 +753,7 @@ const grp=id=>id.replace(/C$/,'');
 const colLbl=p=>p.tipo==='n'?p.id+'N':p.id;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
-const dmy=s=>s?s.split('-').reverse().join('-'):'';
+const dmy=s=>s?String(s).slice(0,10).split('-').reverse().join('-'):'';
 const hora=()=>new Date().toTimeString().slice(0,8);
 let tt;function toast(m,t){const e=$('#toast');e.textContent=m;e.className=t||'';e.style.display='block';clearTimeout(tt);tt=setTimeout(()=>e.style.display='none',2600);}
 const carga=id=>0; /* sin choferes: solo venta local */
@@ -1095,21 +1105,34 @@ function delMov(id,ok){if(!ok)return ask('¿Eliminar este movimiento?',()=>delMo
 const isM=()=>S.view==='mrend';
 // Rendición mayorista: una cuadratura independiente por cliente (S.mrcli). '*' = rendiciones antiguas sin cliente.
 const MLEG='*';
-const mrOk=c=>(x)=>c===MLEG||x===c;
+const mrOk=c=>(x)=>c===MLEG||normCli(x)===normCli(c);
+const cliFijos=()=>[...new Set(db.mayor.clientes.map(c=>normCli(c.nombre)).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
 const RR=()=>{if(!isM())return db.rend;const c=S.mrcli||'';if(c===MLEG)return db.mayor.rend;return db.mayor.rendc[c]||(db.mayor.rendc[c]={});};
-const RV=()=>isM()?db.mayor.ventas.filter(v=>mrOk(S.mrcli||'')(v.cliente)).map(v=>({...v,env:{},penv:{}})):db.ventas;
-const RM=()=>isM()?db.mayor.abonos.filter(a=>!a.anulado&&mrOk(S.mrcli||'')(a.cliente)).map(a=>({fecha:a.fecha})):db.movs;
-const abonosR=(f1,f2)=>db.mayor.abonos.filter(a=>!a.anulado&&mrOk(S.mrcli||'')(a.cliente)&&a.fecha>=f1&&a.fecha<=(f2||f1));
+// Cada venta de un cliente tiene su propia rendición: clave "fecha#N°venta". La clave "fecha" sola = pagos sin venta.
+const MKEY=()=>isM()&&!!S.mrcli&&S.mrcli!==MLEG;
+const rkV=v=>MKEY()?v.fecha+'#'+String(v.num).padStart(5,'0'):v.fecha;
+const rkA=a=>MKEY()&&a.rk?a.rk:a.fecha;
+const rng=(k,f1,f2)=>!f2||f2===f1?k===f1:(k>=f1&&k<=(f2.length===10?f2+'~':f2));
+const RV=()=>isM()?db.mayor.ventas.filter(v=>mrOk(S.mrcli||'')(v.cliente)).map(v=>({...v,env:{},penv:{},rk:rkV(v)})):db.ventas;
+const RM=()=>isM()?db.mayor.abonos.filter(a=>!a.anulado&&mrOk(S.mrcli||'')(a.cliente)).map(a=>({fecha:rkA(a)})):db.movs;
+const abonosR=(f1,f2)=>db.mayor.abonos.filter(a=>!a.anulado&&mrOk(S.mrcli||'')(a.cliente)&&rng(rkA(a),f1,f2||f1));
+function mrAuto(){if(!MKEY()||S.rfecha2)return;const d=String(S.rfecha).slice(0,10);
+  const ks=db.mayor.ventas.filter(v=>!v.anulada&&v.fecha===d&&mrOk(S.mrcli)(v.cliente)).map(rkV).sort();S.rfecha=ks.length?ks[ks.length-1]:d;}
+function mrVentaSel(){
+  const d=String(S.rfecha).slice(0,10),vs=db.mayor.ventas.filter(v=>v.fecha===d&&mrOk(S.mrcli)(v.cliente)).sort((a,b)=>a.num-b.num);
+  return `${vs.map(v=>{const k=rkV(v),n=Object.values(v.items).reduce((a,x)=>a+x,0);
+      return `<button class="vch ${S.rfecha===k?'on':''} ${v.anulada?'an':''}" onclick="S.rfecha='${k}';render()">Venta N° ${v.num}<small>${v.hora.slice(0,5)} · ${n} cilindro${n===1?'':'s'}${v.anulada?' · anulada':''}</small></button>`;}).join('')}
+    <button class="vch ${S.rfecha===d?'on':''}" onclick="S.rfecha='${d}';render()">${vs.length?'Solo pagos':'Sin ventas este día'}</button>`;
+}
 const mrCli=()=>S.mrcli&&S.mrcli!==MLEG?findCli(S.mrcli):null;
 const mrPrecio=p=>{const c=mrCli();return c?precioCli(c,p.id):precioBase(p);};
 function mrClientesSel(){
-  const names=[...new Set([...db.mayor.clientes.map(c=>c.nombre),...db.mayor.ventas.map(v=>v.cliente),...db.mayor.abonos.map(a=>a.cliente)])].filter(Boolean).sort();
-  const keep=S.mrcli;const hoy=today();
-  const opts=names.map(n=>{S.mrcli=n;const sh=saldoHist(hoy);return {n,sh};});S.mrcli=keep;
+  const names=cliFijos();
+  const opts=names.map(n=>({n}));
   const leg=Object.keys(db.mayor.rend||{}).length;
-  return `<select class="no-print" style="min-width:230px;font-weight:600" onchange="S.mrcli=this.value;S.rfecha2='';render()">
+  return `<select class="big" onchange="S.mrcli=this.value;S.rfecha2='';mrAuto();render()">
     <option value="">Elige un cliente...</option>
-    ${opts.map(o=>`<option value="${esc(o.n)}" ${S.mrcli===o.n?'selected':''}>${esc(o.n)}${o.sh?` · ${o.sh>0?'debe':'a favor'} ${money(Math.abs(o.sh))}`:''}</option>`).join('')}
+    ${opts.map(o=>`<option value="${esc(o.n)}" ${S.mrcli===o.n?'selected':''}>${esc(o.n)}</option>`).join('')}
     ${leg?`<option value="${MLEG}" ${S.mrcli===MLEG?'selected':''}>Rendiciones anteriores (todos juntos)</option>`:''}</select>`;
 }
 function getRend(f){if(!RR()[f]){const o={obs:''};RKEYS.forEach(k=>o[k]=[]);RR()[f]=o;}return RR()[f];}
@@ -1137,7 +1160,7 @@ function desc(k,e){
 function sumK(R,k){return (R[k]||[]).reduce((a,e)=>a+val(k,e),0);}
 function calcDia(f){
   const R=RR()[f]||{};const g=k=>R[k]?sumK(R,k):0;
-  const vs=RV().filter(v=>v.fecha===f&&!v.anulada);
+  const vs=RV().filter(v=>(v.rk||v.fecha)===f&&!v.anulada);
   const venta=vs.reduce((a,v)=>a+v.total,0);
   const ms=[];
   const abonos=ms.filter(m=>m.tipo==='Abono').reduce((a,m)=>a+m.monto,0);
@@ -1150,25 +1173,25 @@ function calcDia(f){
   return {vs,venta,abonos,retiros,cargos,deber,rendido,com,saldo:deber-rendido-com};
 }
 function saldoAntes(f){
-  const fechas=new Set([...RV().map(v=>v.fecha),...RM().map(m=>m.fecha),...Object.keys(RR())]);
+  const fechas=new Set([...RV().map(v=>v.rk||v.fecha),...RM().map(m=>m.fecha),...Object.keys(RR())]);
   let s=0;fechas.forEach(d=>{if(d<f)s+=calcDia(d).saldo;});return s;
 }
 function saldoHist(f){
-  const fechas=new Set([...RV().map(v=>v.fecha),...RM().map(m=>m.fecha),...Object.keys(RR())]);
+  const fechas=new Set([...RV().map(v=>v.rk||v.fecha),...RM().map(m=>m.fecha),...Object.keys(RR())]);
   let s=0;fechas.forEach(d=>{if(d<=f)s+=calcDia(d).saldo;});return s;
 }
-const inp=(k,f,ph,w,type='number')=>`<input data-k="${k}" data-f="${f}" type="${type}" ${type==='number'?'inputmode="numeric"':''} placeholder="${ph}" ${w?'class="w"':''} ${type==='date'?`value="${S.rfecha}"`:''}>`;
+const inp=(k,f,ph,w,type='number')=>`<input data-k="${k}" data-f="${f}" type="${type}" ${type==='number'?'inputmode="numeric"':''} placeholder="${ph}" ${w?'class="w"':''} ${type==='date'?`value="${String(S.rfecha).slice(0,10)}"`:''}>`;
 const sel=(k,f,opts)=>`<select data-k="${k}" data-f="${f}">${opts.map(o=>`<option>${o}</option>`).join('')}</select>`;
 const RADSHORT={'De la compañía':'Compañía','Otras compañías':'Otras','Vale Digital':'Digital','Digital Otras compañías':'Digital otras'};
 const rad=(k,f,opts)=>`<div class="radios">${opts.map((o,i)=>`<label title="${o}"><input type="radio" name="r_${k}" data-k="${k}" data-f="${f}" value="${o}" ${i?'':'checked'}> ${k==='vales'?(RADSHORT[o]||o):o}</label>`).join('')}</div>`;
 const vq=k=>`<div class="vq">${VSIZES.map(s=>`<label>${s}<input data-k="${k}" data-f="q${s}" type="number" inputmode="numeric" placeholder="0"></label>`).join('')}</div>`;
 const RCAT={efectivo:'ing',vuelto:'ing',vales:'val',valesCil:'val',cheques:'ban',transf:'ban',transbank:'ban',descuentos:'res',gastos:'res',petroleo:'res',cargos:'car'};
 const multiR=()=>!!S.rfecha2&&S.rfecha2!==S.rfecha;
-function rDates(){const f1=S.rfecha,f2=S.rfecha2||f1;return Object.keys(RR()).filter(d=>d>=f1&&d<=f2).sort();}
+function rDates(){const f1=S.rfecha,f2=S.rfecha2||f1;return Object.keys(RR()).filter(d=>rng(d,f1,f2)).sort();}
 function calcRange(f1,f2){
-  const fechas=new Set([...RV().map(v=>v.fecha),...RM().map(m=>m.fecha),...Object.keys(RR())]);
+  const fechas=new Set([...RV().map(v=>v.rk||v.fecha),...RM().map(m=>m.fecha),...Object.keys(RR())]);
   const r={vs:[],venta:0,abonos:0,retiros:0,cargos:0,deber:0,rendido:0,com:0,saldo:0};
-  fechas.forEach(d=>{if(d>=f1&&d<=f2){const c=calcDia(d);r.vs.push(...c.vs);['venta','abonos','retiros','cargos','deber','rendido','com','saldo'].forEach(k=>r[k]+=c[k]);}});
+  fechas.forEach(d=>{if(rng(d,f1,f2)){const c=calcDia(d);r.vs.push(...c.vs);['venta','abonos','retiros','cargos','deber','rendido','com','saldo'].forEach(k=>r[k]+=c[k]);}});
   return r;
 }
 function sec(k,title,fields,btn='Agregar'){
@@ -1190,7 +1213,7 @@ function secAbonos(){
 function addAbonoR(){
   const cli=normCli(S.mrcli===MLEG?'':S.mrcli),mo=num($('#rab-mo').value);
   if(!cli)return toast('Elige el cliente','err');if(!mo)return toast('Ingresa un monto','err');
-  db.mayor.abonos.push({id:Date.now(),fecha:S.rfecha,hora:hora(),usuario:S.user.nombre,cliente:cli,monto:mo,medio:$('#rab-me').value,det:$('#rab-det').value.trim(),anulado:false});
+  db.mayor.abonos.push({id:Date.now(),fecha:String(S.rfecha).slice(0,10),rk:S.rfecha,hora:hora(),usuario:S.user.nombre,cliente:cli,monto:mo,medio:$('#rab-me').value,det:$('#rab-det').value.trim(),anulado:false});
   save();toast('Abono agregado ✔');render();
 }
 function addR(k){
@@ -1208,8 +1231,10 @@ function addR(k){
 function delR(k,id,f){const R=getRend(f||S.rfecha);R[k]=R[k].filter(e=>e.id!==id);save();render();}
 function saveObs(){getRend(S.rfecha).obs=$('#robs').value;save();toast('Observaciones guardadas ✔');}
 function vRend(){
+  if(!MKEY()&&String(S.rfecha).includes('#'))S.rfecha=String(S.rfecha).slice(0,10);
   if(isM()&&!S.mrcli)return frame('Rendición Mayorista','may',null,`
-    <div class="rtop" style="flex-wrap:wrap"><span class="rtt">Rendición Mayorista · ${esc(S.user.suc)}</span>${mrClientesSel()}<button class="btn sm no-print" onclick="go('may')">Venta Mayorista</button><button class="btn sm no-print" onclick="go('mcta')">Cuenta Clientes</button></div>
+    <div class="rtop" style="flex-wrap:wrap"><span class="rtt">Rendición Mayorista · ${esc(S.user.suc)}</span><button class="btn sm no-print" onclick="go('may')">Venta Mayorista</button><button class="btn sm no-print" onclick="go('mcta')">Cuenta Clientes</button></div>
+    <div class="mrbar no-print"><div class="row"><span class="lbl">CLIENTE</span>${mrClientesSel()}</div></div>
     <p class="empty" style="padding:50px 20px;text-align:center">Cada cliente mayorista tiene su propia cuadratura.<br><b>Elige un cliente</b> arriba para ver o hacer su rendición.</p>
     <div class="rfoot no-print"><button class="btn" onclick="go('may')">Volver</button></div>`,true);
   const f=S.rfecha,f2=S.rfecha2||f,m=multiR(),R=getRend(f),d=calcRange(f,f2),ps=db.products;
@@ -1222,11 +1247,13 @@ function vRend(){
   const row=(t,fn,cls='')=>`<tr class="${cls}"><td class="l"><b>${t}</b></td>${ps.map(p=>`<td class="${p.tipo==='c'?'cat':''}">${fn(p)}</td>`).join('')}</tr>`;
   const MY=isM();
   return frame(MY?'Rendición Mayorista':'Rendición',MY?'may':'home',null,`
-    <div class="rtop" style="flex-wrap:wrap"><span class="rtt">${MY?'Rendición Mayorista':'Rendición'} · ${esc(S.user.suc)}</span>${MY?`<span class="rtt mr-pcli" style="display:none">· ${esc(S.mrcli===MLEG?'Anteriores':S.mrcli)}</span>`+mrClientesSel():''}${MY?`<button class="btn sm no-print" onclick="go('may')">Venta Mayorista</button><button class="btn sm no-print" onclick="go('mcta')">Cuenta Clientes</button>`:''}FECHA MOVIMIENTO &nbsp; Desde <input type="date" id="rf" value="${f}"> Hasta <input type="date" id="rf2" value="${S.rfecha2||''}">
-      <button class="btn sm" onclick="S.rfecha=$('#rf').value||today();S.rfecha2=$('#rf2').value;render()">Ver</button>
+    <div class="rtop" style="flex-wrap:wrap"><span class="rtt">${MY?'Rendición Mayorista':'Rendición'} · ${esc(S.user.suc)}</span>${MY?`<span class="rtt mr-pcli" style="display:none">· ${esc(S.mrcli===MLEG?'Anteriores':S.mrcli)}${String(f).includes('#')?' · Venta N° '+Number(String(f).split('#')[1]):''}</span>`:''}${MY?`<button class="btn sm no-print" onclick="go('may')">Venta Mayorista</button><button class="btn sm no-print" onclick="go('mcta')">Cuenta Clientes</button>`:''}FECHA MOVIMIENTO &nbsp; Desde <input type="date" id="rf" value="${String(f).slice(0,10)}"> Hasta <input type="date" id="rf2" value="${S.rfecha2||''}">
+      <button class="btn sm" onclick="S.rfecha=$('#rf').value||today();S.rfecha2=$('#rf2').value;if(S.rfecha2===S.rfecha)S.rfecha2='';mrAuto();render()">Ver</button>
       ${m?`<button class="btn sm" onclick="S.rfecha2='';render()">Solo un día</button>`:''}</div>
-    ${ant&&!hist?`<div class="alert" style="margin:12px 12px 0;background:var(--ok1);border-color:var(--ok1);color:var(--ok)">${ic('check')}<span>El saldo de días anteriores (${money(ant)}) quedó abonado. Pendiente total: $ 0.</span></div>`:''}
-    ${ant&&hist?`<div class="alert" style="margin:12px 12px 0;${ant<0?'background:var(--b1);border-color:var(--b2);color:var(--b8)':'background:var(--red1);border-color:var(--red1);color:var(--red)'}">${ic('alert')}<span>Hay un <b>saldo ${ant>0?'en contra':'a favor'} de días anteriores de ${money(Math.abs(ant))}</b>${ant>0?' (falta por rendir)':' (sobrante)'}. Queda guardado y se suma hasta que lo abones y llegue a $ 0.</span></div>`:''}
+    ${MY?`<div class="mrbar no-print"><div class="row"><span class="lbl">CLIENTE</span>${mrClientesSel()}</div>
+      ${MKEY()&&!m?`<div class="row"><span class="lbl">VENTA</span>${mrVentaSel()}</div>`:''}</div>`:''}
+    ${ant&&!hist?`<div class="alert" style="margin:12px 12px 0;background:var(--ok1);border-color:var(--ok1);color:var(--ok)">${ic('check')}<span>El saldo de ${MKEY()?'ventas anteriores':'días anteriores'} (${money(ant)}) quedó abonado. Pendiente total: $ 0.</span></div>`:''}
+    ${ant&&hist?`<div class="alert" style="margin:12px 12px 0;${ant<0?'background:var(--b1);border-color:var(--b2);color:var(--b8)':'background:var(--red1);border-color:var(--red1);color:var(--red)'}">${ic('alert')}<span>Hay un <b>saldo ${ant>0?'en contra':'a favor'} de ${MKEY()?'ventas anteriores':'días anteriores'} de ${money(Math.abs(ant))}</b>${ant>0?' (falta por rendir)':' (sobrante)'}. Queda guardado y se suma hasta que lo abones y llegue a $ 0.</span></div>`:''}
     ${m?`<div class="alert" style="margin:12px 12px 0">${ic('alert')}Mostrando del ${dmy(f)} al ${dmy(f2)}. Para agregar pagos o gastos, elige un solo día.</div>`:''}
     <div class="rgrid rc"><div>
       <div class="tw"><table>
@@ -1249,7 +1276,7 @@ function vRend(){
         </table>
         <table class="tbox" style="margin-top:10px">
           <tr><td class="l">Saldo anterior pendiente</td><td class="r">${money(ant)}</td></tr>
-          <tr><td class="l">+ ${m?'Venta del período':'Venta del día'}</td><td class="r">${money(d.venta)}</td></tr>
+          <tr><td class="l">+ ${m?'Venta del período':(MKEY()?'Venta':'Venta del día')}</td><td class="r">${money(d.venta)}</td></tr>
           <tr><td class="l">+ Cargos</td><td class="r">${money(d.cargos)}</td></tr>
           <tr><td class="l">− Rendido</td><td class="r">${money(d.rendido)}</td></tr>
           ${isM()?`<tr><td class="l">− Comisión vales <span class="hint">(a favor del cliente)</span></td><td class="r">${money(d.com||0)}</td></tr>`:''}
@@ -1462,12 +1489,13 @@ const mayf=c=>frame(S.view==='mcta'?'Cuenta Clientes':'Venta Mayorista','home',M
 const MEDIOS=['Efectivo','Transferencia','Cheque','Transbank','Otro'];
 const normCli=x=>String(x||'').trim().replace(/\s+/g,' ').toUpperCase();
 function mClientes(){const m={};
-  db.mayor.ventas.filter(v=>!v.anulada).forEach(v=>{const c=m[v.cliente]=m[v.cliente]||{cliente:v.cliente,comp:0,abo:0,ult:''};c.comp+=v.total;if(v.fecha>c.ult)c.ult=v.fecha;});
-  db.mayor.abonos.filter(a=>!a.anulado).forEach(a=>{const c=m[a.cliente]=m[a.cliente]||{cliente:a.cliente,comp:0,abo:0,ult:''};c.abo+=a.monto;});
-  Object.entries(db.mayor.rendc||{}).forEach(([n,RRc])=>{let t=0;Object.values(RRc).forEach(Rd=>(Rd.vales||[]).forEach(e=>t+=comVale(e)));
-    if(!t)return;const c=m[n]=m[n]||{cliente:n,comp:0,abo:0,ult:''};c.abo+=t;c.com=(c.com||0)+t;});
+  db.mayor.ventas.filter(v=>!v.anulada).forEach(v=>{const k=normCli(v.cliente),c=m[k]=m[k]||{cliente:k,comp:0,abo:0,ult:''};c.comp+=v.total;if(v.fecha>c.ult)c.ult=v.fecha;});
+  db.mayor.abonos.filter(a=>!a.anulado).forEach(a=>{const k=normCli(a.cliente),c=m[k]=m[k]||{cliente:k,comp:0,abo:0,ult:''};c.abo+=a.monto;});
+  Object.entries(db.mayor.rendc||{}).forEach(([n,RRc])=>{let t=0,pg=0,cg=0;Object.values(RRc).forEach(Rd=>{(Rd.vales||[]).forEach(e=>t+=comVale(e));
+      ['efectivo','vales','valesCil','cheques','transf','descuentos','gastos','transbank','petroleo'].forEach(x=>pg+=sumK(Rd,x));pg-=sumK(Rd,'vuelto');cg+=sumK(Rd,'cargos');});
+    if(!t&&!pg&&!cg)return;const k=normCli(n),c=m[k]=m[k]||{cliente:k,comp:0,abo:0,ult:''};c.abo+=t+pg;c.comp+=cg;c.com=(c.com||0)+t;});
   return Object.values(m).sort((a,b)=>(b.comp-b.abo)-(a.comp-a.abo)||a.cliente.localeCompare(b.cliente));}
-const cliList=()=>`<datalist id="mclis">${[...new Set([...db.mayor.clientes.map(c=>c.nombre),...mClientes().map(c=>c.cliente)])].sort().map(n=>`<option value="${esc(n)}">`).join('')}</datalist>`;
+const cliList=()=>`<datalist id="mclis">${cliFijos().map(n=>`<option value="${esc(n)}">`).join('')}</datalist>`;
 const itemsTxt=v=>Object.keys(v.items).map(id=>`<span class="chip">${v.items[id]} × ${colLbl(P(id))} <span class="hint">${money(v.precios[id])}</span></span>`).join('');
 const precioBase=p=>p.mayor||p.venta;
 const listaDe=c=>c&&db.mayor.listas.find(l=>l.id===c.lista);
@@ -1634,13 +1662,13 @@ function vMRend(){
   const cl=mClientes(),T=cl.reduce((a,c)=>({comp:a.comp+c.comp,abo:a.abo+c.abo}),{comp:0,abo:0});
   const f1=S.mr1||'',f2=S.mr2||'',fc=S.mfc||'',inR=f=>(!f1||f>=f1)&&(!f2||f<=f2)&&true;
   const mov=[...db.mayor.ventas.map(v=>({t:'v',x:v,f:v.fecha,h:v.hora,c:v.cliente})),...db.mayor.abonos.map(a=>({t:'a',x:a,f:a.fecha,h:a.hora,c:a.cliente}))]
-    .filter(m=>inR(m.f)&&(!fc||m.c===fc)).sort((a,b)=>(b.f+b.h).localeCompare(a.f+a.h));
+    .filter(m=>inR(m.f)&&(!fc||normCli(m.c)===normCli(fc))).sort((a,b)=>(b.f+b.h).localeCompare(a.f+a.h));
   const pv=mov.filter(m=>m.t==='v'&&!m.x.anulada).reduce((a,m)=>a+m.x.total,0),pa=mov.filter(m=>m.t==='a'&&!m.x.anulado).reduce((a,m)=>a+m.x.monto,0);
   const deben=cl.filter(c=>c.comp-c.abo>0);
   return mayf(`<p class="stitle">Cuenta mayorista · independiente de la rendición local</p>
     <div class="stats" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:20px">
       <div class="stat"><div class="k">Total vendido</div><div class="v">${money(T.comp)}</div></div>
-      <div class="stat"><div class="k">Total abonado</div><div class="v">${money(T.abo)}</div></div>
+      <div class="stat"><div class="k">Total pagado</div><div class="v">${money(T.abo)}</div></div>
       <div class="stat"><div class="k">Saldo por cobrar</div><div class="v" style="color:${T.comp-T.abo>0?'var(--red)':T.comp-T.abo<0?'var(--b7)':'var(--tx)'}">${money(T.comp-T.abo)}</div></div>
     </div>
     <div class="sect">REGISTRAR ABONO</div>
@@ -1653,7 +1681,7 @@ function vMRend(){
       <button class="btn primary" onclick="grabarAbono()">Registrar abono</button>
       <span class="hint" id="asal" style="width:100%"></span></div>
     <div class="sect">SALDO POR CLIENTE</div>
-    <div class="tw blk"><table><tr><th class="l">CLIENTE</th><th>COMPRADO</th><th>ABONADO</th><th>SALDO</th><th>ÚLTIMA COMPRA</th><th class="no-print"></th></tr>
+    <div class="tw blk"><table><tr><th class="l">CLIENTE</th><th>COMPRADO</th><th>PAGADO</th><th>SALDO</th><th>ÚLTIMA COMPRA</th><th class="no-print"></th></tr>
     ${cl.length?cl.map(c=>{const sd=c.comp-c.abo;return `<tr><td class="l"><b>${esc(c.cliente)}</b></td><td class="n">${money(c.comp)}</td><td class="n">${money(c.abo)}${c.com?`<div class="hint">incl. comisión vales ${money(c.com)}</div>`:''}</td>
       <td class="n" style="color:${sd>0?'var(--red)':sd<0?'var(--b7)':'var(--tx)'}"><b>${money(sd)}</b> ${sd===0?'<span class="badge">Al día</span>':sd<0?'<span class="badge">A favor</span>':''}</td><td>${c.ult?dmy(c.ult):'-'}</td>
       <td class="no-print"><button class="btn sm" onclick="S.mfc=${esc(JSON.stringify(c.cliente))};render()">Ver movimientos</button></td></tr>`;}).join('')
@@ -1661,7 +1689,7 @@ function vMRend(){
     ${cl.length?`<tr class="tot"><td class="l">TOTAL (${deben.length} con saldo)</td><td>${money(T.comp)}</td><td>${money(T.abo)}</td><td>${money(T.comp-T.abo)}</td><td></td><td class="no-print"></td></tr>`:''}
     </table></div>
     <div class="sect">MOVIMIENTOS</div>
-    <div class="frow" style="flex-wrap:wrap">Cliente <select id="mfc" onchange="S.mfc=this.value;render()"><option value="">Todos</option>${cl.map(c=>`<option ${fc===c.cliente?'selected':''}>${esc(c.cliente)}</option>`).join('')}</select>
+    <div class="frow" style="flex-wrap:wrap">Cliente <select id="mfc" onchange="S.mfc=this.value;render()"><option value="">Todos</option>${cliFijos().map(n=>`<option ${normCli(fc)===n?'selected':''}>${esc(n)}</option>`).join('')}</select>
       Desde <input type="date" id="mr1" value="${f1}"> Hasta <input type="date" id="mr2" value="${f2}">
       <button class="btn" onclick="S.mr1=$('#mr1').value;S.mr2=$('#mr2').value;render()">Buscar</button>
       <span class="hint">Período: vendido <b>${money(pv)}</b> · abonado <b>${money(pa)}</b></span></div>

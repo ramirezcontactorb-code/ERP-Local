@@ -422,7 +422,7 @@ tbody tr:hover td,table tr:hover>td:not([colspan]){background-color:color-mix(in
 .lshell .login input,.lshell .login select{padding:11px 13px}
 .lshell .login .btn{padding:12px;font-size:14px}
 @media (max-width:780px){.lshell{grid-template-columns:1fr}.lside{padding:28px 24px;gap:18px}.lside h1{font-size:30px}.lshell .login{padding:28px 24px}.phead h1{font-size:28px}}
-@media print{.appbar{display:none}.phead h1{font-size:24px}}
+@media print{.mr-pcli{display:inline!important}.appbar{display:none}.phead h1{font-size:24px}}
 .mcard .mgo{margin-top:auto}
 .mcard .md{margin-bottom:14px}
 .rtt{font-family:var(--f-disp)!important;font-weight:700!important;font-size:21px!important;letter-spacing:-.03em;color:var(--tx)}
@@ -572,7 +572,7 @@ function norm(d){
   if(!d||!d.products)d=Object.assign(fresh(),d||{});
   d.products=PRODS.map(x=>Object.assign(JSON.parse(JSON.stringify(x)),(d.products||[]).find(p=>p.id===x.id)||{}));
   d.vacios=d.vacios||{};d.prestados=d.prestados||{};d.min=d.min||{};d.choferes=d.choferes||[];d.bmovs=d.bmovs||[];
-  d.phist=d.phist||[];d.comision=d.comision||{};d.ventas=d.ventas||[];d.movs=d.movs||[];d.rend=d.rend||{};d.seq=d.seq||1;d.mayor=d.mayor||{};d.mayor.ventas=d.mayor.ventas||[];d.mayor.abonos=d.mayor.abonos||[];d.mayor.seq=d.mayor.seq||1;d.mayor.clientes=d.mayor.clientes||[];d.mayor.rend=d.mayor.rend||{};if(!d.mayor.listas)d.mayor.listas=[15,30,40].map((x,i)=>({id:i+1,nombre:'Mayorista '+x,dto:x}));return d;}
+  d.phist=d.phist||[];d.comision=d.comision||{};d.ventas=d.ventas||[];d.movs=d.movs||[];d.rend=d.rend||{};d.seq=d.seq||1;d.mayor=d.mayor||{};d.mayor.ventas=d.mayor.ventas||[];d.mayor.abonos=d.mayor.abonos||[];d.mayor.seq=d.mayor.seq||1;d.mayor.clientes=d.mayor.clientes||[];d.mayor.rend=d.mayor.rend||{};d.mayor.rendc=d.mayor.rendc||{};if(!d.mayor.listas)d.mayor.listas=[15,30,40].map((x,i)=>({id:i+1,nombre:'Mayorista '+x,dto:x}));return d;}
 function loadLocal(suc){let d=readLS(sucKey(suc));
   if((!d||!d.products)&&suc==='Cervantes'){const old=readLS(KEY);if(old&&old.products){d=old;delete d.users;}}
   return (d&&d.products)?norm(d):null;}
@@ -760,7 +760,7 @@ const PRESETS_P={
   bodeguero:{n:'Bodeguero',p:['bodega','bmov','bedit']},
   encargado:{n:'Encargado de local',p:['venta','anular','rend','mayor','bodega','bmov','bedit','precios','com','phist']},
 };
-const VIEWP={venta:'venta',caja:'venta',rend:'rend',bres:'bodega',bmov:'bmov',bcarga:'bmov',may:'mayor',mrend:'mayor',mcta:'mayor',binv:'binv',brec:'binv',btrans:'btrans',bmin:'bmin',bedit:'bedit',config:'precios',penv:'precios',clientes:'precios',com:'com',phist:'phist',users:'users',colores:'theme',inf:'inf'};
+const VIEWP={venta:'venta',caja:'venta',rend:'rend',bres:'bodega',bmov:'bmov',bcarga:'bmov',may:'mayor',mrend:'mayor',mcta:'mayor',binv:'binv',brec:'binv',btrans:'btrans',bmin:'bmin',bedit:'bedit',config:'precios',penv:'precios',clientes:'precios',pmay:'precios',com:'com',phist:'phist',users:'users',colores:'theme',inf:'inf'};
 const curUser=()=>S.user?USERS.find(u=>u.u.toLowerCase()===String(S.user.u).toLowerCase()):null;
 const GLOBALP=['users','theme','inf'];
 const LOCALP=()=>ALLP.filter(k=>!GLOBALP.includes(k));
@@ -775,7 +775,7 @@ function can(k){const u=curUser();if(!u)return false;if(u.rol==='admin')return t
   return ((psOf(u)[S.user.suc])||[]).includes(k);}
 const canView=v=>!VIEWP[v]||can(VIEWP[v]);
 const userSucs=u=>(!u||u.rol==='admin')?SUCS:SUCS.filter(x=>(psOf(u)[x]||[]).length);
-const firstConf=()=>['config','penv','clientes','com','phist','users','colores'].find(v=>canView(v));
+const firstConf=()=>['config','penv','pmay','clientes','com','phist','users','colores'].find(v=>canView(v));
 function go(v){if(v==='config'&&!canView('config'))v=firstConf()||'home';if(!canView(v)){toast('No tienes permiso para esta sección. Pídelo a un administrador.','err');return;}S.view=v;render();window.scrollTo(0,0);}
 
 /* ================= LOGIN ================= */
@@ -966,7 +966,38 @@ function vVenta(){
     <button class="btn" onclick="go('home')">Volver</button><span class="sp"></span>
     <button class="btn" onclick="S.cart=newCart();S.last=null;render()">Nueva venta</button>
   </div>
-  ${S.last?`<p class="hint" style="text-align:center;margin-top:8px">Última venta grabada: N° ${db.ventas.find(v=>v.id===S.last)?.num??''}</p>`:''}`);
+  ${S.last?`<p class="hint" style="text-align:center;margin-top:8px">Última venta grabada: N° ${db.ventas.find(v=>v.id===S.last)?.num??''}</p>`:''}
+  ${ventasHoyTbl()}`);
+}
+function ventasHoyTbl(){
+  const ps=db.products,vs=db.ventas.filter(v=>v.fecha===today()).slice().reverse().slice(0,30);
+  const qi=(attr,id,val)=>`<input class="ei" style="width:56px;text-align:center" type="number" min="0" inputmode="numeric" placeholder="0" ${attr}="${id}" value="${val||''}">`;
+  return `<p class="stitle" style="margin-top:24px">Ventas de hoy <span class="hint" style="text-transform:none;letter-spacing:0">· usa el lápiz para corregir cantidades</span></p>
+  <div class="tw"><table><tr><th>N°</th><th>HORA</th><th>USUARIO</th>${ps.map(p=>`<th>${colLbl(p)}</th>`).join('')}<th>TOTAL</th><th class="no-print"></th></tr>
+  ${vs.length?vs.map(v=>{const ed=S.vedit===v.id&&!v.anulada;
+    return `<tr class="${v.anulada?'anul':''}"><td>${v.num}</td><td>${v.hora}</td><td>${esc(v.usuario)}</td>
+    ${ps.map(p=>ed?`<td>${qi('data-ei',p.id,v.items[p.id])}${p.envase?`<div class="hint" style="margin-top:4px">Env ${qi('data-ee',p.id,(v.env||{})[p.id])}</div>`:''}</td>`
+      :`<td>${v.items[p.id]||''}${(v.env||{})[p.id]?`<div class="hint">+${v.env[p.id]} env</div>`:''}</td>`).join('')}
+    <td class="r"><b>${money(v.total)}</b>${v.editada?`<div class="hint">editada</div>`:''}</td>
+    <td class="no-print" style="white-space:nowrap">${v.anulada?'<span class="badge red">Anulada</span>':ed
+      ?`<button class="btn primary sm" onclick="saveEditVenta(${v.id})">${ic('check')}Guardar</button> <button class="btn sm" onclick="S.vedit=null;render()">Cancelar</button>`
+      :`<button class="ib" title="Editar cantidades" onclick="S.vedit=${v.id};render()">${ic('edit')}</button>`}</td></tr>`;}).join('')
+    :`<tr><td colspan="${ps.length+5}" class="empty">Aún no hay ventas hoy</td></tr>`}
+  </table></div>`;
+}
+function saveEditVenta(id){
+  const v=db.ventas.find(x=>x.id===id);if(!v||v.anulada)return;
+  const ni={},ne={};$$('[data-ei]').forEach(el=>{const n=num(el.value);if(n)ni[el.dataset.ei]=n;});$$('[data-ee]').forEach(el=>{const n=num(el.value);if(n)ne[el.dataset.ee]=n;});
+  if(!Object.keys(ni).length&&!Object.keys(ne).length)return toast('La venta debe tener al menos una cantidad. Si no corresponde, anúlala.','err');
+  for(const p of db.products){const d=(ni[p.id]||0)-(v.items[p.id]||0);if(d>p.stock)return toast(`Stock insuficiente de ${colLbl(p)} (hay ${p.stock})`,'err');}
+  for(const k in v.items){const p=P(k);if(p)p.stock+=v.items[k];}
+  for(const g in (v.vac||{}))db.vacios[g]=Math.max(0,(db.vacios[g]||0)-v.vac[g]);
+  const vac={};let sub=0;
+  for(const k in ni){P(k).stock-=ni[k];if(v.precios[k]==null)v.precios[k]=precio(P(k));sub+=ni[k]*v.precios[k];const r=ni[k]-(ne[k]||0);if(r>0)vac[grp(k)]=(vac[grp(k)]||0)+r;}
+  v.penv=v.penv||{};for(const k in ne){if(v.penv[k]==null)v.penv[k]=P(k).envase;sub+=ne[k]*v.penv[k];}
+  for(const g in vac)db.vacios[g]=(db.vacios[g]||0)+vac[g];
+  v.items=ni;v.env=ne;v.vac=vac;v.total=Math.max(0,sub-(v.desc||0));v.editada={usuario:S.user.nombre,fecha:today(),hora:hora()};
+  S.vedit=null;save();toast('Venta N° '+v.num+' corregida ✔');render();
 }
 function grabar(){
   const c=S.cart;
@@ -1020,22 +1051,37 @@ function delMov(id,ok){if(!ok)return ask('¿Eliminar este movimiento?',()=>delMo
 
 /* ================= RENDICIÓN ================= */
 const isM=()=>S.view==='mrend';
-const RR=()=>isM()?db.mayor.rend:db.rend;
-const RV=()=>isM()?db.mayor.ventas.map(v=>({...v,env:{},penv:{}})):db.ventas;
-const RM=()=>isM()?db.mayor.abonos.filter(a=>!a.anulado).map(a=>({fecha:a.fecha})):db.movs;
-const abonosR=(f1,f2)=>db.mayor.abonos.filter(a=>!a.anulado&&a.fecha>=f1&&a.fecha<=(f2||f1));
+// Rendición mayorista: una cuadratura independiente por cliente (S.mrcli). '*' = rendiciones antiguas sin cliente.
+const MLEG='*';
+const mrOk=c=>(x)=>c===MLEG||x===c;
+const RR=()=>{if(!isM())return db.rend;const c=S.mrcli||'';if(c===MLEG)return db.mayor.rend;return db.mayor.rendc[c]||(db.mayor.rendc[c]={});};
+const RV=()=>isM()?db.mayor.ventas.filter(v=>mrOk(S.mrcli||'')(v.cliente)).map(v=>({...v,env:{},penv:{}})):db.ventas;
+const RM=()=>isM()?db.mayor.abonos.filter(a=>!a.anulado&&mrOk(S.mrcli||'')(a.cliente)).map(a=>({fecha:a.fecha})):db.movs;
+const abonosR=(f1,f2)=>db.mayor.abonos.filter(a=>!a.anulado&&mrOk(S.mrcli||'')(a.cliente)&&a.fecha>=f1&&a.fecha<=(f2||f1));
+const mrCli=()=>S.mrcli&&S.mrcli!==MLEG?findCli(S.mrcli):null;
+const mrPrecio=p=>{const c=mrCli();return c?precioCli(c,p.id):precioBase(p);};
+function mrClientesSel(){
+  const names=[...new Set([...db.mayor.clientes.map(c=>c.nombre),...db.mayor.ventas.map(v=>v.cliente),...db.mayor.abonos.map(a=>a.cliente)])].filter(Boolean).sort();
+  const keep=S.mrcli;const hoy=today();
+  const opts=names.map(n=>{S.mrcli=n;const sh=saldoHist(hoy);return {n,sh};});S.mrcli=keep;
+  const leg=Object.keys(db.mayor.rend||{}).length;
+  return `<select class="no-print" style="min-width:230px;font-weight:600" onchange="S.mrcli=this.value;S.rfecha2='';render()">
+    <option value="">Elige un cliente...</option>
+    ${opts.map(o=>`<option value="${esc(o.n)}" ${S.mrcli===o.n?'selected':''}>${esc(o.n)}${o.sh?` · ${o.sh>0?'debe':'a favor'} ${money(Math.abs(o.sh))}`:''}</option>`).join('')}
+    ${leg?`<option value="${MLEG}" ${S.mrcli===MLEG?'selected':''}>Rendiciones anteriores (todos juntos)</option>`:''}</select>`;
+}
 function getRend(f){if(!RR()[f]){const o={obs:''};RKEYS.forEach(k=>o[k]=[]);RR()[f]=o;}return RR()[f];}
 const vprice=s=>s==='H'?P('H15A').venta:P(s).venta;
 const vcil=s=>s==='H'?0:P(s).envase;
 function val(k,e){
-  if(k==='vales')return VSIZES.reduce((a,s)=>a+(e['q'+s]||0)*vprice(s),0);
+  if(k==='vales')return VSIZES.reduce((a,s)=>a+(e['q'+s]||0)*(e.pr&&e.pr[s]!=null?e.pr[s]:vprice(s)),0);
   if(k==='valesCil')return VSIZES.reduce((a,s)=>a+(e['q'+s]||0)*vcil(s),0);
   return e.monto||0;
 }
 function desc(k,e){
   const q=()=>VSIZES.filter(s=>e['q'+s]).map(s=>`${s}×${e['q'+s]}`).join(' ');
   switch(k){
-    case 'vales':return `${esc(e.tipo)}: ${q()} <span style="color:var(--ok)">(com. ${money(comVale(e))})</span>`;
+    case 'vales':return `${e.cliente?`<b>${esc(e.cliente)}</b> · `:''}${esc(e.tipo)}: ${q()}`;
     case 'valesCil':return q();
     case 'cheques':return `N° ${esc(e.nro)} ${esc(e.banco)}`;
     case 'transf':return `${esc(e.banco)} ${dmy(e.fecha)} ${esc(e.det)}`;
@@ -1058,7 +1104,8 @@ function calcDia(f){
   const deber=venta+cargos+abonos-retiros;
   const abo=isM()?abonosR(f).reduce((a,x)=>a+x.monto,0):0;
   const rendido=abo+g('efectivo')-g('vuelto')+g('vales')+g('valesCil')+g('cheques')+g('transf')+g('descuentos')+g('gastos')+g('transbank')+g('petroleo');
-  return {vs,venta,abonos,retiros,cargos,deber,rendido,saldo:deber-rendido};
+  const com=isM()?(R.vales||[]).reduce((a,e)=>a+comVale(e),0):0;
+  return {vs,venta,abonos,retiros,cargos,deber,rendido,com,saldo:deber-rendido-com};
 }
 function saldoAntes(f){
   const fechas=new Set([...RV().map(v=>v.fecha),...RM().map(m=>m.fecha),...Object.keys(RR())]);
@@ -1078,8 +1125,8 @@ const multiR=()=>!!S.rfecha2&&S.rfecha2!==S.rfecha;
 function rDates(){const f1=S.rfecha,f2=S.rfecha2||f1;return Object.keys(RR()).filter(d=>d>=f1&&d<=f2).sort();}
 function calcRange(f1,f2){
   const fechas=new Set([...RV().map(v=>v.fecha),...RM().map(m=>m.fecha),...Object.keys(RR())]);
-  const r={vs:[],venta:0,abonos:0,retiros:0,cargos:0,deber:0,rendido:0,saldo:0};
-  fechas.forEach(d=>{if(d>=f1&&d<=f2){const c=calcDia(d);r.vs.push(...c.vs);['venta','abonos','retiros','cargos','deber','rendido','saldo'].forEach(k=>r[k]+=c[k]);}});
+  const r={vs:[],venta:0,abonos:0,retiros:0,cargos:0,deber:0,rendido:0,com:0,saldo:0};
+  fechas.forEach(d=>{if(d>=f1&&d<=f2){const c=calcDia(d);r.vs.push(...c.vs);['venta','abonos','retiros','cargos','deber','rendido','com','saldo'].forEach(k=>r[k]+=c[k]);}});
   return r;
 }
 function sec(k,title,fields,btn='Agregar'){
@@ -1092,14 +1139,14 @@ function sec(k,title,fields,btn='Agregar'){
 function secAbonos(){
   const m=multiR(),it=abonosR(S.rfecha,S.rfecha2||S.rfecha),tot=it.reduce((a,x)=>a+x.monto,0);
   const cl=[...new Set([...db.mayor.clientes.map(c=>c.nombre),...mClientes().map(c=>c.cliente)])].sort();
-  return `<div class="rbox k-ing"><div class="rbox-h">ABONOS DE CLIENTES<span class="tot">TOTAL: ${money(tot)}</span></div>
-    ${m?'':`<div class="rbox-b no-print"><select id="rab-cli" style="flex:0 1 190px;width:190px"><option value="">Cliente...</option>${cl.map(n=>`<option>${esc(n)}</option>`).join('')}</select>
+  return `<div class="rbox k-ing"><div class="rbox-h">${S.mrcli&&S.mrcli!==MLEG?'ABONOS DEL CLIENTE':'ABONOS DE CLIENTES'}<span class="tot">TOTAL: ${money(tot)}</span></div>
+    ${m||S.mrcli===MLEG?'':`<div class="rbox-b no-print">
       <input id="rab-mo" type="number" inputmode="numeric" placeholder="Monto $"><select id="rab-me">${MEDIOS.map(x=>`<option>${x}</option>`).join('')}</select>
       <input id="rab-det" class="w" placeholder="Detalle"><button class="btn sm" onclick="addAbonoR()">Agregar</button></div>`}
     ${it.length?`<div class="chips">${it.map(a=>`<span class="chip">${m?`<b>${dmy(a.fecha).slice(0,5)}</b> `:''}${esc(a.cliente)} · ${esc(a.medio)}${a.det?' '+esc(a.det):''} <b>${money(a.monto)}</b><button class="no-print" onclick="anularAbono(${a.id})">✕</button></span>`).join('')}</div>`:''}</div>`;
 }
 function addAbonoR(){
-  const cli=normCli($('#rab-cli').value),mo=num($('#rab-mo').value);
+  const cli=normCli(S.mrcli===MLEG?'':S.mrcli),mo=num($('#rab-mo').value);
   if(!cli)return toast('Elige el cliente','err');if(!mo)return toast('Ingresa un monto','err');
   db.mayor.abonos.push({id:Date.now(),fecha:S.rfecha,hora:hora(),usuario:S.user.nombre,cliente:cli,monto:mo,medio:$('#rab-me').value,det:$('#rab-det').value.trim(),anulado:false});
   save();toast('Abono agregado ✔');render();
@@ -1112,12 +1159,17 @@ function addR(k){
   });
   if(k==='vales'||k==='valesCil'){if(!VSIZES.some(s=>o['q'+s]))return toast('Ingresa una cantidad','err');}
   else if(!o.monto)return toast('Ingresa un monto','err');
-  if(k==='vales'){o.com=0;o.com=comVale({...o,com:undefined});}
+  if(k==='vales'&&isM()){o.pr={};VSIZES.forEach(s=>{if(o['q'+s])o.pr[s]=mrPrecio(P(s==='H'?'H15A':s));});}
+  if(k==='vales'){o.com=isM()?comVale({...o,com:undefined}):0;}
   getRend(S.rfecha)[k].push({...o,id:Date.now()});save();toast('Agregado ✔');render();
 }
 function delR(k,id,f){const R=getRend(f||S.rfecha);R[k]=R[k].filter(e=>e.id!==id);save();render();}
 function saveObs(){getRend(S.rfecha).obs=$('#robs').value;save();toast('Observaciones guardadas ✔');}
 function vRend(){
+  if(isM()&&!S.mrcli)return frame('Rendición Mayorista','may',null,`
+    <div class="rtop" style="flex-wrap:wrap"><span class="rtt">Rendición Mayorista · ${esc(S.user.suc)}</span>${mrClientesSel()}<button class="btn sm no-print" onclick="go('may')">Venta Mayorista</button><button class="btn sm no-print" onclick="go('mcta')">Cuenta Clientes</button></div>
+    <p class="empty" style="padding:50px 20px;text-align:center">Cada cliente mayorista tiene su propia cuadratura.<br><b>Elige un cliente</b> arriba para ver o hacer su rendición.</p>
+    <div class="rfoot no-print"><button class="btn" onclick="go('may')">Volver</button></div>`,true);
   const f=S.rfecha,f2=S.rfecha2||f,m=multiR(),R=getRend(f),d=calcRange(f,f2),ps=db.products;
   const q={},en={},tot={};ps.forEach(p=>{q[p.id]=0;en[p.id]=0;tot[p.id]=0;});
   d.vs.forEach(v=>{
@@ -1128,7 +1180,7 @@ function vRend(){
   const row=(t,fn,cls='')=>`<tr class="${cls}"><td class="l"><b>${t}</b></td>${ps.map(p=>`<td class="${p.tipo==='c'?'cat':''}">${fn(p)}</td>`).join('')}</tr>`;
   const MY=isM();
   return frame(MY?'Rendición Mayorista':'Rendición',MY?'may':'home',null,`
-    <div class="rtop" style="flex-wrap:wrap"><span class="rtt">${MY?'Rendición Mayorista':'Rendición'} · ${esc(S.user.suc)}</span>${MY?`<button class="btn sm no-print" onclick="go('may')">Venta Mayorista</button><button class="btn sm no-print" onclick="go('mcta')">Cuenta Clientes</button>`:''}FECHA MOVIMIENTO &nbsp; Desde <input type="date" id="rf" value="${f}"> Hasta <input type="date" id="rf2" value="${S.rfecha2||''}">
+    <div class="rtop" style="flex-wrap:wrap"><span class="rtt">${MY?'Rendición Mayorista':'Rendición'} · ${esc(S.user.suc)}</span>${MY?`<span class="rtt mr-pcli" style="display:none">· ${esc(S.mrcli===MLEG?'Anteriores':S.mrcli)}</span>`+mrClientesSel():''}${MY?`<button class="btn sm no-print" onclick="go('may')">Venta Mayorista</button><button class="btn sm no-print" onclick="go('mcta')">Cuenta Clientes</button>`:''}FECHA MOVIMIENTO &nbsp; Desde <input type="date" id="rf" value="${f}"> Hasta <input type="date" id="rf2" value="${S.rfecha2||''}">
       <button class="btn sm" onclick="S.rfecha=$('#rf').value||today();S.rfecha2=$('#rf2').value;render()">Ver</button>
       ${m?`<button class="btn sm" onclick="S.rfecha2='';render()">Solo un día</button>`:''}</div>
     ${ant&&!hist?`<div class="alert" style="margin:12px 12px 0;background:var(--ok1);border-color:var(--ok1);color:var(--ok)">${ic('check')}<span>El saldo de días anteriores (${money(ant)}) quedó abonado. Pendiente total: $ 0.</span></div>`:''}
@@ -1137,7 +1189,7 @@ function vRend(){
     <div class="rgrid rc"><div>
       <div class="tw"><table>
         <tr><th class="l"></th>${ps.map(p=>`<th class="${p.tipo==='c'?'cat':''}">${p.id}</th>`).join('')}</tr>
-        ${MY?row('PRECIO BASE MAY.',p=>money(precioBase(p))):row('VENTA LOCAL',p=>money(p.venta))}
+        ${MY?row(S.mrcli===MLEG?'PRECIO BASE MAY.':'PRECIO CLIENTE',p=>money(mrPrecio(p))):row('VENTA LOCAL',p=>money(p.venta))}
         ${row('VENTA (Cantidad)',p=>`<b style="color:var(--num);font-size:16px">${q[p.id]}</b>`)}
         ${MY?'':row('VENTA CON ENVASE',p=>p.envase?en[p.id]:'-')}
         ${row('TOTAL',p=>money(tot[p.id]),'tot')}
@@ -1158,11 +1210,8 @@ function vRend(){
           <tr><td class="l">+ ${m?'Venta del período':'Venta del día'}</td><td class="r">${money(d.venta)}</td></tr>
           <tr><td class="l">+ Cargos</td><td class="r">${money(d.cargos)}</td></tr>
           <tr><td class="l">− Rendido</td><td class="r">${money(d.rendido)}</td></tr>
+          ${isM()?`<tr><td class="l">− Comisión vales <span class="hint">(a favor del cliente)</span></td><td class="r">${money(d.com||0)}</td></tr>`:''}
           <tr class="tot"><td class="l">= SALDO PENDIENTE</td><td class="r">${money(ant+d.saldo)}</td></tr>
-        </table>
-        <table class="tbox" style="margin-top:10px">
-          <tr><th>COMISIÓN VALES (ganancia del local)</th></tr>
-          <tr><td class="bigv" style="color:var(--ok)">${money(comRango())}</td></tr>
         </table></div>
       </div>
     </div>
@@ -1175,7 +1224,7 @@ function vRend(){
       ${sec('valesCil','VALES (Sólo Cilindro)',vq('valesCil'),'Guardar')}
       ${sec('cheques','CHEQUE',inp('cheques','monto','Monto $')+inp('cheques','nro','N° cheque',0,'text')+sel('cheques','banco',['Banco...',...BANCOS]))}
       ${sec('transf','TRANSFERENCIA ELECTRÓNICA',inp('transf','monto','Monto $')+sel('transf','banco',['Banco...',...BANCOS])+inp('transf','fecha','',0,'date')+inp('transf','det','Detalle',1,'text'))}
-      ${sec('descuentos','DESCUENTOS',sel('descuentos','tipo',['Tipo...','Convenio','Promoción','Cliente frecuente','Otro'])+inp('descuentos','monto','Monto $')+inp('descuentos','det','Detalle',1,'text'))}
+      ${sec('descuentos','DESCUENTOS',sel('descuentos','tipo',['Tipo...','QR','Convenio','Promoción','Cliente frecuente','Otro'])+inp('descuentos','monto','Monto $')+inp('descuentos','det','Detalle',1,'text'))}
       ${sec('gastos','GASTOS',sel('gastos','tipo',['Tipo...','Combustible','Alimentación','Mantención','Peaje','Otro'])+inp('gastos','monto','Monto $')+inp('gastos','det','Detalle',1,'text'))}
       ${sec('transbank','TRANSBANK',rad('transbank','tipo',['Débito','Crédito'])+inp('transbank','monto','Monto $')+inp('transbank','nro','N° voucher',0,'text')+inp('transbank','fecha','',0,'date'))}
     </div></div>
@@ -1222,7 +1271,7 @@ function vColores(){
       <tr class="sec"><td class="l">BODEGA</td><td class="n big">50</td><td class="n big">106</td><td class="n big">100</td></tr></table></div>
     <div style="text-align:center;display:flex;gap:10px;justify-content:center"><button class="btn primary" style="padding:10px 26px" onclick="saveTheme()">Guardar theme</button><button class="btn" onclick="resetTheme()">Restablecer theme original</button></div>`);
 }
-const CONF_SIDE=[['config','tag','Precio Local'],['penv','cyl','Precio Envases'],['clientes','users','Precios Mayoristas'],['com','cash','Comisión Vales'],['phist','list','Historial de Precios'],['users','users','Usuarios'],['colores','palette','Theme']];
+const CONF_SIDE=[['config','tag','Precio Local'],['penv','cyl','Precio Envases'],['pmay','tag','Precios Mayoristas'],['clientes','users','Clientes'],['com','cash','Comisión Vales'],['phist','list','Historial de Precios'],['users','users','Usuarios'],['colores','palette','Theme']];
 const conf=c=>frame('Configuración','home',CONF_SIDE,c);
 function vConfig(){
   return conf(`<div class="sect">PRECIO LOCAL</div>
@@ -1256,10 +1305,10 @@ function vPHist(){
 }
 const VTIPOS=['De la compañía','Otras compañías','Vale Digital','Digital Otras compañías'];
 function comVale(e){if(typeof e.com==='number')return e.com;const c=db.comision[e.tipo]||{};return VSIZES.reduce((a,s)=>a+(e['q'+s]||0)*(c[s]||0),0);}
-function comRango(){let t=0;rDates().forEach(f=>(RR()[f].vales||[]).forEach(e=>t+=comVale(e)));return t;}
+function comRango(){if(!isM())return 0;let t=0;rDates().forEach(f=>(RR()[f].vales||[]).forEach(e=>t+=comVale(e)));return t;}
 function vCom(){
   return conf(`<div class="sect">COMISIÓN DE VALES</div>
-    <p class="hint" style="margin:8px 0 12px;text-align:center">Escribe cuánto gana el local por cada vale recibido, según el tipo de vale y el cilindro. En la rendición se calcula sola al grabar un vale.</p>
+    <p class="hint" style="margin:8px 0 12px;text-align:center">Escribe cuánto se le abona al cliente por cada vale, según el tipo de vale y el cilindro. Solo se aplica en la <b>Rendición Mayorista</b>: es un beneficio para el cliente. Se calcula sola al grabar un vale y se descuenta de su saldo (queda a favor en su cuenta). En la rendición local no hay comisión.</p>
     <div class="tw blk"><table>
       <tr><th class="l">TIPO DE VALE</th>${VSIZES.map(s=>`<th>${s==='H'?'H15':s+' kg'}</th>`).join('')}</tr>
       ${VTIPOS.map((t,i)=>`<tr><td class="l"><b>${t}</b></td>${VSIZES.map(s=>`<td>$ <input class="ei" style="width:80px" type="number" inputmode="numeric" id="cm-${i}-${s}" data-cm="${i}|${s}" value="${(db.comision[t]||{})[s]||''}" placeholder="0"></td>`).join('')}</tr>`).join('')}
@@ -1373,18 +1422,21 @@ const normCli=x=>String(x||'').trim().replace(/\s+/g,' ').toUpperCase();
 function mClientes(){const m={};
   db.mayor.ventas.filter(v=>!v.anulada).forEach(v=>{const c=m[v.cliente]=m[v.cliente]||{cliente:v.cliente,comp:0,abo:0,ult:''};c.comp+=v.total;if(v.fecha>c.ult)c.ult=v.fecha;});
   db.mayor.abonos.filter(a=>!a.anulado).forEach(a=>{const c=m[a.cliente]=m[a.cliente]||{cliente:a.cliente,comp:0,abo:0,ult:''};c.abo+=a.monto;});
+  Object.entries(db.mayor.rendc||{}).forEach(([n,RRc])=>{let t=0;Object.values(RRc).forEach(Rd=>(Rd.vales||[]).forEach(e=>t+=comVale(e)));
+    if(!t)return;const c=m[n]=m[n]||{cliente:n,comp:0,abo:0,ult:''};c.abo+=t;c.com=(c.com||0)+t;});
   return Object.values(m).sort((a,b)=>(b.comp-b.abo)-(a.comp-a.abo)||a.cliente.localeCompare(b.cliente));}
 const cliList=()=>`<datalist id="mclis">${[...new Set([...db.mayor.clientes.map(c=>c.nombre),...mClientes().map(c=>c.cliente)])].sort().map(n=>`<option value="${esc(n)}">`).join('')}</datalist>`;
 const itemsTxt=v=>Object.keys(v.items).map(id=>`<span class="chip">${v.items[id]} × ${colLbl(P(id))} <span class="hint">${money(v.precios[id])}</span></span>`).join('');
 const precioBase=p=>p.mayor||p.venta;
 const listaDe=c=>c&&db.mayor.listas.find(l=>l.id===c.lista);
 const precioLista=(l,p)=>Math.max(0,precioBase(p)-(l?l.dto*p.kg:0));
-const precioCli=(c,id)=>precioLista(listaDe(c),P(id));
+const esEsp=c=>!!c&&c.lista==='esp';
+const precioCli=(c,id)=>esEsp(c)?((c.esp&&c.esp[id])||precioBase(P(id))):precioLista(listaDe(c),P(id));
 const findCli=n=>db.mayor.clientes.find(c=>c.nombre===normCli(n));
 const qtyTxt=v=>Object.keys(v.items).map(id=>`<span class="chip">${v.items[id]} × ${colLbl(P(id))}</span>`).join('');
 function vMay(){
   const ps=db.products,ult=db.mayor.ventas.slice().reverse().slice(0,20),CL=db.mayor.clientes;
-  if(!CL.length)return mayf(`<div class="sect">NUEVA VENTA MAYORISTA</div><p class="empty" style="padding:30px;text-align:center">Aún no hay clientes mayoristas.<br>Créalos en <b>Configuración → Precios Mayoristas</b>.<br><br>${canView('clientes')?`<button class="btn primary" onclick="go('clientes')">Ir a Precios Mayoristas</button>`:'Pídele a un administrador que los cree.'}</p>`);
+  if(!CL.length)return mayf(`<div class="sect">NUEVA VENTA MAYORISTA</div><p class="empty" style="padding:30px;text-align:center">Aún no hay clientes mayoristas.<br>Créalos en <b>Configuración → Clientes</b>.<br><br>${canView('clientes')?`<button class="btn primary" onclick="go('clientes')">Ir a Clientes</button>`:'Pídele a un administrador que los cree.'}</p>`);
   return mayf(`<div class="sect">NUEVA VENTA MAYORISTA</div>
     <div class="frm" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">
       <label style="flex:1;min-width:220px">Cliente<select id="mcli"><option value="">Selecciona un cliente</option>${CL.slice().sort((x,y)=>x.nombre.localeCompare(y.nombre)).map(c=>`<option>${esc(c.nombre)}</option>`).join('')}</select></label>
@@ -1401,11 +1453,24 @@ function vMay(){
     <p class="hint">El precio se aplica solo según el cliente y se ve en la Rendición Mayorista.</p>
     <p class="stitle" style="margin-top:24px">Últimas ventas mayoristas</p>
     <div class="tw"><table><tr><th>N°</th><th>FECHA</th><th>HORA</th><th class="l">CLIENTE</th><th class="l">CILINDROS</th><th>USUARIO</th><th class="no-print"></th></tr>
-    ${ult.length?ult.map(v=>`<tr class="${v.anulada?'anul':''}"><td>${v.num}</td><td>${dmy(v.fecha)}</td><td>${v.hora}</td><td class="l"><b>${esc(v.cliente)}</b>${v.obs?`<div class="hint">${esc(v.obs)}</div>`:''}</td>
-      <td class="l" style="white-space:normal">${qtyTxt(v)}</td><td>${esc(v.usuario)}</td>
-      <td class="no-print">${v.anulada?'<span class="badge red">Anulada</span>':(can('anular')?`<button class="btn sm danger" onclick="anularMay(${v.id})">Anular</button>`:'')}</td></tr>`).join('')
+    ${ult.length?ult.map(v=>{const ed=S.medit===v.id&&!v.anulada;return `<tr class="${v.anulada?'anul':''}"><td>${v.num}</td><td>${dmy(v.fecha)}</td><td>${v.hora}</td><td class="l"><b>${esc(v.cliente)}</b>${v.obs?`<div class="hint">${esc(v.obs)}</div>`:''}</td>
+      <td class="l" style="white-space:normal">${ed?ps.map(p=>`<label style="display:inline-flex;align-items:center;gap:4px;margin:2px 8px 2px 0"><b>${colLbl(p)}</b><input class="ei" style="width:56px;text-align:center" type="number" min="0" inputmode="numeric" placeholder="0" data-mei="${p.id}" value="${v.items[p.id]||''}"></label>`).join(''):qtyTxt(v)}${v.editada&&!ed?' <span class="hint">· editada</span>':''}</td><td>${esc(v.usuario)}</td>
+      <td class="no-print" style="white-space:nowrap">${v.anulada?'<span class="badge red">Anulada</span>':ed
+        ?`<button class="btn primary sm" onclick="saveEditMay(${v.id})">${ic('check')}Guardar</button> <button class="btn sm" onclick="S.medit=null;render()">Cancelar</button>`
+        :`<button class="ib" title="Editar cantidades" onclick="S.medit=${v.id};render()">${ic('edit')}</button> ${can('anular')?`<button class="btn sm danger" onclick="anularMay(${v.id})">Anular</button>`:''}`}</td></tr>`;}).join('')
       :'<tr><td colspan="7" class="empty">Aún no hay ventas mayoristas</td></tr>'}
     </table></div>`);
+}
+function saveEditMay(id){
+  const v=db.mayor.ventas.find(x=>x.id===id);if(!v||v.anulada)return;
+  const ni={};$$('[data-mei]').forEach(el=>{const n=num(el.value);if(n)ni[el.dataset.mei]=n;});
+  if(!Object.keys(ni).length)return toast('La venta debe tener al menos una cantidad. Si no corresponde, anúlala.','err');
+  for(const p of db.products){const d=(ni[p.id]||0)-(v.items[p.id]||0);if(d>p.stock)return toast(`No hay suficientes ${colLbl(p)} en bodega (hay ${p.stock})`,'err');}
+  for(const k in v.items){P(k).stock+=v.items[k];if(v.canje)db.vacios[grp(k)]=Math.max(0,(db.vacios[grp(k)]||0)-v.items[k]);}
+  const c=findCli(v.cliente);let total=0;
+  for(const k in ni){P(k).stock-=ni[k];if(v.canje)db.vacios[grp(k)]=(db.vacios[grp(k)]||0)+ni[k];if(v.precios[k]==null)v.precios[k]=c?precioCli(c,k):precioBase(P(k));total+=ni[k]*v.precios[k];}
+  v.items=ni;v.total=total;v.editada={usuario:S.user.nombre,fecha:today(),hora:hora()};
+  S.medit=null;save();toast('Venta mayorista N° '+v.num+' corregida ✔');render();
 }
 function grabarMay(){
   const c=findCli($('#mcli').value);if(!c)return toast('Selecciona el cliente','err');
@@ -1422,7 +1487,7 @@ function grabarMay(){
 /* ---- Configuración: precios mayoristas (precio base + listas con descuento por kilo + clientes) ---- */
 function vClientes(){
   const ps=db.products,L=db.mayor.listas.slice().sort((x,y)=>x.dto-y.dto),CL=db.mayor.clientes.slice().sort((x,y)=>x.nombre.localeCompare(y.nombre));
-  const lsel=(id,cur,on)=>`<select id="${id}" ${on||''}><option value="">Precio base (sin descuento)</option>${L.map(l=>`<option value="${l.id}" ${cur===l.id?'selected':''}>${esc(l.nombre)} · −$${l.dto}/kg</option>`).join('')}</select>`;
+  const lsel=(id,cur,on)=>`<select id="${id}" ${on||''}><option value="">Precio base (sin descuento)</option>${L.map(l=>`<option value="${l.id}" ${cur===l.id?'selected':''}>${esc(l.nombre)} · −$${l.dto}/kg</option>`).join('')}<option value="esp" ${cur==='esp'?'selected':''}>Precio especial</option></select>`;
   return conf(`<div class="sect">CLIENTES MAYORISTAS</div>
     <div class="frm"><label style="flex:1;min-width:200px">Nuevo cliente<input id="ncli" placeholder="Nombre del cliente o empresa"></label>
       <label>Lista de precios${lsel('nlis','')}</label>
@@ -1437,15 +1502,18 @@ function vClientes(){
         <td class="no-print"><button class="ib red" title="Eliminar cliente" onclick="delCli(${c.id})">${ic('x')}</button></td></tr>`).join('')
         :`<tr><td colspan="${ps.length+3}" class="empty">Aún no hay clientes. Agrega el primero arriba.</td></tr>`}
     </table></div>
-
-    <div class="sect" style="margin-top:8px">LISTAS DE PRECIOS</div>
-    <p class="hint" style="margin:6px 0 12px">Cada lista descuenta pesos por kilo al precio base. Ejemplo: Mayorista 40 en un 15 kg descuenta 40 × 15 = $600.</p>
+    <p class="hint" style="margin:6px 0 12px">Los precios de cada cliente salen de su lista. Si eliges <b>Precio especial</b>, escribes el precio de cada cilindro y no cambia con el precio base. Para cambiar listas o el precio base, ve a ${canView('pmay')?`<a href="#" style="color:var(--b6);font-weight:600" onclick="go('pmay');return false">Precios Mayoristas</a>`:'Precios Mayoristas'}.</p>`);
+}
+function vPMay(){
+  const ps=db.products,L=db.mayor.listas.slice().sort((x,y)=>x.dto-y.dto),CL=db.mayor.clientes;
+  return conf(`<div class="sect">LISTAS DE PRECIOS</div>
+    <p class="hint" style="margin:6px 0 12px">Los clientes se asignan a una lista en ${canView('clientes')?`<a href="#" style="color:var(--b6);font-weight:600" onclick="go('clientes');return false">Clientes</a>`:'Clientes'}. Cada lista descuenta pesos por kilo al precio base. Ejemplo: Mayorista 40 en un 15 kg descuenta 40 × 15 = $600.</p>
     <div class="frm"><label style="flex:1;min-width:180px">Nombre de la lista<input id="lnom" placeholder="Ej: Mayorista 25"></label>
       <label>Descuento $ por kilo<input id="ldto" type="number" min="0" inputmode="numeric" placeholder="25" style="width:120px"></label>
       <button class="btn primary" onclick="addLista()">${ic('plus')}Agregar lista</button></div>
     <div class="tw blk"><table>
       <tr><th class="l">LISTA</th><th>DESCUENTO</th>${ps.map(p=>`<th>${colLbl(p)}</th>`).join('')}<th>CLIENTES</th><th class="no-print"></th></tr>
-      <tr class="tot"><td class="l">Precio base</td><td>—</td>${ps.map(p=>`<td>${money(precioBase(p))}</td>`).join('')}<td>${CL.filter(c=>!listaDe(c)).length}</td><td class="no-print"></td></tr>
+      <tr class="tot"><td class="l">Precio base</td><td>—</td>${ps.map(p=>`<td>${money(precioBase(p))}</td>`).join('')}<td>${CL.filter(c=>!listaDe(c)&&!esEsp(c)).length}</td><td class="no-print"></td></tr>
       ${L.map(l=>`<tr><td class="l"><b>${esc(l.nombre)}</b></td><td>−$${l.dto} / kg</td>${ps.map(p=>`<td class="n">${money(precioLista(l,p))}</td>`).join('')}
         <td>${CL.filter(c=>c.lista===l.id).length}</td><td class="no-print"><button class="ib red" title="Eliminar lista" onclick="delLista(${l.id})">${ic('x')}</button></td></tr>`).join('')}
     </table></div>
@@ -1459,29 +1527,25 @@ function vClientes(){
     </table></div>
     <div style="text-align:center;margin:-6px 0 28px"><button class="btn primary" style="padding:10px 26px" onclick="pbDirecto()">Actualizar precio base</button></div>
 
-    <div class="sect" style="margin-top:8px">SUBIR O BAJAR POR KILO <span class="hint" style="text-transform:none;letter-spacing:0">(opcional)</span></div>
-    <p class="hint" style="margin:6px 0 12px">Sube o baja el precio base en pesos por kilo, para todos los cilindros a la vez.</p>
+    <div class="sect" style="margin-top:8px">PRECIO ESPECIAL</div>
+    <p class="hint" style="margin:6px 0 12px">Para clientes con un precio distinto a las listas. Escribe el precio de cada cilindro; no cambia cuando actualizas el precio base.</p>
+    ${(()=>{const E=CL.filter(esEsp).sort((x,y)=>x.nombre.localeCompare(y.nombre)),O=CL.filter(c=>!esEsp(c)).sort((x,y)=>x.nombre.localeCompare(y.nombre));
+      return `<div class="frm"><label style="flex:1;min-width:220px">Cliente<select id="espcli"><option value="">Elige un cliente...</option>${O.map(c=>`<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}</select></label>
+      <button class="btn primary" onclick="const v=$('#espcli').value;if(!v)return toast('Elige un cliente','err');setCliLista(Number(v),'esp')">${ic('plus')}Dar precio especial</button></div>
     <div class="tw blk"><table>
-      <tr><th class="l">CILINDRO</th><th>PRECIO BASE</th><th>MOVIMIENTO</th><th>PESOS X KILO</th><th>PRECIO FINAL</th></tr>
-      ${ps.map(p=>`<tr><td class="l"><b>Cilindro ${colLbl(p)}</b> <span class="hint">${p.sub||p.kg+' kilos'}</span></td><td class="n">${money(precioBase(p))}</td>
-        <td><label class="chk" style="display:inline-flex;margin-right:12px"><input type="radio" name="sb-${p.id}" value="1" checked onchange="pbPrev()"> Sube</label><label class="chk" style="display:inline-flex"><input type="radio" name="sb-${p.id}" value="-1" onchange="pbPrev()"> Baja</label></td>
-        <td><input class="ei" style="width:80px" type="number" min="0" inputmode="numeric" placeholder="0" data-pk="${p.id}" oninput="pbPrev()"></td>
-        <td class="n" id="pf-${p.id}"><b>${money(precioBase(p))}</b></td></tr>`).join('')}
-    </table></div>
-    <div style="text-align:center;margin:-6px 0 28px"><button class="btn primary" style="padding:10px 26px" onclick="pbApply()">Actualizar precios</button></div>`);
+      <tr><th class="l">CLIENTE</th>${ps.map(p=>`<th>${colLbl(p)}</th>`).join('')}<th class="no-print"></th></tr>
+      ${E.length?E.map(c=>`<tr><td class="l"><b>${esc(c.nombre)}</b></td>
+        ${ps.map(p=>S.espEdit===c.id?`<td>$ <input class="ei" style="width:76px;text-align:right" type="number" min="0" inputmode="numeric" value="${precioCli(c,p.id)}" title="Precio especial ${colLbl(p)}" data-esp="${p.id}"></td>`:`<td class="n">${money(precioCli(c,p.id))}</td>`).join('')}
+        <td class="no-print" style="white-space:nowrap">${S.espEdit===c.id
+          ?`<button class="btn primary" style="padding:6px 12px" title="Guardar precios" onclick="saveEsp(${c.id})">${ic('check')}Guardar</button> <button class="btn" style="padding:6px 10px" title="Cancelar" onclick="S.espEdit=null;render()">Cancelar</button>`
+          :`<button class="ib" title="Modificar precios" onclick="S.espEdit=${c.id};render()">${ic('edit')}</button> <button class="ib red" title="Quitar precio especial" onclick="setCliLista(${c.id},'')">${ic('x')}</button>`}</td></tr>`).join('')
+        :`<tr><td colspan="${ps.length+2}" class="empty">Ningún cliente tiene precio especial.</td></tr>`}
+    </table></div>`;})()}`);
 }
 function pbDirecto(){
   let n=0;$$('[data-pd]').forEach(el=>{const p=P(el.dataset.pd),v=num(el.value),a=precioBase(p);if(!v||v===a)return;
     db.phist.push({fecha:today(),hora:hora(),usuario:S.user.nombre,prod:colLbl(p),campo:'mayor',antes:a,despues:v});p.mayor=v;n++;});
   if(!n)return toast('No hay cambios de precio','err');
-  save();toast(n+' precio(s) base actualizado(s) ✔');render();
-}
-function pbPrev(){db.products.forEach(p=>{const sg=Number(($(`[name="sb-${p.id}"]:checked`)||{}).value||1),k=num($(`[data-pk="${p.id}"]`).value),f=Math.max(0,precioBase(p)+sg*k*p.kg);
-  $('#pf-'+p.id).innerHTML=k?`<b style="color:${sg>0?'var(--red)':'var(--ok)'}">${money(f)}</b>`:`<b>${money(f)}</b>`;});}
-function pbApply(){
-  let n=0;db.products.forEach(p=>{const sg=Number(($(`[name="sb-${p.id}"]:checked`)||{}).value||1),k=num($(`[data-pk="${p.id}"]`).value);if(!k)return;
-    const a=precioBase(p),f=Math.max(0,a+sg*k*p.kg);db.phist.push({fecha:today(),hora:hora(),usuario:S.user.nombre,prod:colLbl(p),campo:'mayor',antes:a,despues:f});p.mayor=f;n++;});
-  if(!n)return toast('Escribe los pesos por kilo a subir o bajar','err');
   save();toast(n+' precio(s) base actualizado(s) ✔');render();
 }
 function addLista(){
@@ -1493,12 +1557,24 @@ function delLista(id,ok){
   if(!ok)return ask(`¿Eliminar la lista ${l.nombre}?${k?` ${k} cliente(s) quedarán con el precio base.`:''}`,()=>delLista(id,1));
   db.mayor.listas=db.mayor.listas.filter(x=>x.id!==id);db.mayor.clientes.forEach(c=>{if(c.lista===id)c.lista=null;});save();toast('Lista eliminada');render();
 }
-function setCliLista(id,v){const c=db.mayor.clientes.find(x=>x.id===id);if(!c)return;c.lista=v?Number(v):null;save();toast('Lista de '+c.nombre+' actualizada ✔');render();}
+function setCliLista(id,v){const c=db.mayor.clientes.find(x=>x.id===id);if(!c)return;
+  if(v==='esp'){const e={};db.products.forEach(p=>e[p.id]=precioCli(c,p.id));c.esp=Object.assign(e,c.esp||{});c.lista='esp';S.espEdit=c.id;save();toast('Escribe los precios especiales de '+c.nombre+' y aprieta Guardar');if(S.view!=='pmay'&&canView('pmay'))go('pmay');else render();return;}
+  c.lista=v?Number(v):null;save();toast(v?'Lista de '+c.nombre+' actualizada ✔':c.nombre+' quedó con precio base ✔');render();}
+function saveEsp(cid){const c=db.mayor.clientes.find(x=>x.id===cid);if(!c)return;
+  const ins=[...$$('[data-esp]')];if(ins.some(el=>!num(el.value)))return toast('Escribe un precio válido en todos los cilindros','err');
+  let n=0;c.esp=c.esp||{};ins.forEach(el=>{const pid=el.dataset.esp,v=num(el.value),a=precioCli(c,pid);if(v===a)return;
+    db.phist.push({fecha:today(),hora:hora(),usuario:S.user.nombre,prod:colLbl(P(pid))+' · '+c.nombre,campo:'mayor',antes:a,despues:v});c.esp[pid]=v;n++;});
+  S.espEdit=null;save();toast(n?'Precio especial de '+c.nombre+' guardado ✔':'Sin cambios. Precios bloqueados');render();}
+function setEsp(cid,pid,v){const c=db.mayor.clientes.find(x=>x.id===cid);if(!c)return;const n=num(v);if(!n)return toast('Escribe un precio válido','err');
+  const a=precioCli(c,pid);if(n===a)return;c.esp=c.esp||{};c.esp[pid]=n;
+  db.phist.push({fecha:today(),hora:hora(),usuario:S.user.nombre,prod:colLbl(P(pid))+' · '+c.nombre,campo:'mayor',antes:a,despues:n});
+  save();toast('Precio especial de '+c.nombre+' ('+colLbl(P(pid))+') guardado ✔');}
 function addCli(){
   const n=normCli($('#ncli').value);if(!n)return toast('Escribe el nombre del cliente','err');
   if(findCli(n))return toast('Ese cliente ya existe','err');
-  const lv=$('#nlis').value;
-  db.mayor.clientes.push({id:Date.now(),nombre:n,rut:$('#nrut').value.trim(),tel:$('#ntel').value.trim(),lista:lv?Number(lv):null});
+  const lv=$('#nlis').value,c={id:Date.now(),nombre:n,rut:$('#nrut').value.trim(),tel:$('#ntel').value.trim(),lista:lv==='esp'?'esp':lv?Number(lv):null};
+  if(c.lista==='esp'){c.esp={};db.products.forEach(p=>c.esp[p.id]=precioBase(p));}
+  db.mayor.clientes.push(c);
   save();toast('Cliente agregado ✔');render();
 }
 function delCli(id,ok){
@@ -1536,7 +1612,7 @@ function vMRend(){
       <span class="hint" id="asal" style="width:100%"></span></div>
     <div class="sect">SALDO POR CLIENTE</div>
     <div class="tw blk"><table><tr><th class="l">CLIENTE</th><th>COMPRADO</th><th>ABONADO</th><th>SALDO</th><th>ÚLTIMA COMPRA</th><th class="no-print"></th></tr>
-    ${cl.length?cl.map(c=>{const sd=c.comp-c.abo;return `<tr><td class="l"><b>${esc(c.cliente)}</b></td><td class="n">${money(c.comp)}</td><td class="n">${money(c.abo)}</td>
+    ${cl.length?cl.map(c=>{const sd=c.comp-c.abo;return `<tr><td class="l"><b>${esc(c.cliente)}</b></td><td class="n">${money(c.comp)}</td><td class="n">${money(c.abo)}${c.com?`<div class="hint">incl. comisión vales ${money(c.com)}</div>`:''}</td>
       <td class="n" style="color:${sd>0?'var(--red)':sd<0?'var(--b7)':'var(--tx)'}"><b>${money(sd)}</b> ${sd===0?'<span class="badge">Al día</span>':sd<0?'<span class="badge">A favor</span>':''}</td><td>${c.ult?dmy(c.ult):'-'}</td>
       <td class="no-print"><button class="btn sm" onclick="S.mfc=${esc(JSON.stringify(c.cliente))};render()">Ver movimientos</button></td></tr>`;}).join('')
       :'<tr><td colspan="6" class="empty">Aún no hay clientes mayoristas</td></tr>'}
@@ -1882,7 +1958,8 @@ function repSuc(suc,f1,f2){
     r.vs.forEach(v=>{for(const id in v.items){units[id]=(units[id]||0)+v.items[id];monto[id]=(monto[id]||0)+v.items[id]*(v.precios[id]||0);}
       for(const id in v.env)env+=v.env[id];desc+=v.desc||0;});
     const g={};RKEYS.forEach(k=>g[k]=0);let com=0;
-    Object.keys(db.rend).filter(x=>x>=f1&&x<=f2).forEach(f=>{const R=db.rend[f];RKEYS.forEach(k=>g[k]+=sumK(R,k));(R.vales||[]).forEach(e=>com+=comVale(e));});
+    Object.keys(db.rend).filter(x=>x>=f1&&x<=f2).forEach(f=>{const R=db.rend[f];RKEYS.forEach(k=>g[k]+=sumK(R,k));});
+    [((db.mayor&&db.mayor.rend)||{}),...Object.values((db.mayor&&db.mayor.rendc)||{})].forEach(RRc=>Object.keys(RRc).filter(x=>x>=f1&&x<=f2).forEach(f=>(RRc[f].vales||[]).forEach(e=>com+=comVale(e))));
     const stock={};db.products.forEach(p=>stock[p.id]=llenosTot(p.id));
     const byDay={};r.vs.forEach(v=>byDay[v.fecha]=(byDay[v.fecha]||0)+v.total);
     return {suc,vs:r.vs,byDay,venta:r.venta,n:r.vs.length,units,monto,desc,env,g,com,rendido:r.rendido,saldo:r.saldo,
@@ -2021,7 +2098,7 @@ function vInf(){
       ${kpi('N° de ventas',T.n,0,PV.n,v=>v)}
       ${kpi('Cilindros vendidos',T.tarros,0,PV.tarros,v=>v)}
       ${kpi('Kilos vendidos',T.kilos,0,PV.kilos,v=>v.toLocaleString('es-CL'))}
-      ${kpi('Comisión vales',T.com,0,PV.com,money)}
+      ${kpi('Comisión vales (clientes)',T.com,0,PV.com,money)}
     </div>
 
     <div class="cgrid">
@@ -2053,7 +2130,7 @@ function vInf(){
 
 /* ================= RENDER ================= */
 const VIEWS={login:vLogin,home:vHome,caja:vCaja,venta:vVenta,rend:vRend,may:vMay,mrend:vRend,mcta:vMRend,config:vConfig,com:vCom,colores:vColores,inf:vInf,phist:vPHist,users:vUsers,
-  penv:vPEnv,clientes:vClientes,bres:vBRes,bcarga:vBCarga,bmov:vBMov,bedit:vBEdit};
+  penv:vPEnv,clientes:vClientes,pmay:vPMay,bres:vBRes,bcarga:vBCarga,bmov:vBMov,bedit:vBEdit};
 function render(){
   if(S.user&&!READY){$('#app').innerHTML=`<div class="login-wrap"><div class="login" style="text-align:center"><div class="lbrand" style="justify-content:center"><span class="sq">MR</span><div style="text-align:left"><b>MR</b><small>Sistema Local</small></div></div><p>Cargando datos compartidos…</p></div></div>`;return;}
   if((!S.user||!db)&&S.view!=='login')S.view='login';

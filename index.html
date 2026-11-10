@@ -265,7 +265,49 @@ textarea{width:100%;min-height:100px;resize:vertical}
 .rc .vq input{padding:3px 4px}
 .rc table th,.rc table td{padding:4px 5px}
 .rtop{padding:8px 14px!important}
-@media (max-width:1100px){.rc{grid-template-columns:1fr!important}.rc .rbox-b{flex-wrap:wrap}}
+@media (max-width:1100px){.rc{grid-template-columns:minmax(0,1fr)!important}.rc .rbox-b{flex-wrap:wrap}.rgrid,.rleft2{grid-template-columns:minmax(0,1fr)!important}}
+/* ---- venta mayorista en celular ---- */
+.mm-l{display:block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mu);margin:14px 0 6px}
+.mm select,.mm input[type=date],.mm #mobs{width:100%;height:46px;font-size:16px;border-radius:10px}
+.mm select{font-weight:700}
+.mm-row{display:flex;gap:8px;align-items:flex-end}
+.mm-row .btn{height:46px;padding:0 16px;font-size:15px}
+.mm-g{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.mm-g .edc{padding:12px 8px;background:var(--card)}
+.mm-g .edc.on{border-color:var(--b6);background:var(--b0);box-shadow:0 0 0 1px var(--b6) inset}
+.mm-g .edc .t{font-size:16px}
+.mm-g .edc .pm button{width:42px;height:42px;font-size:22px;border-radius:10px}
+.mm-g .edc .pm input{width:56px;height:42px;font-size:18px}
+.mm-g .edc .sub b{color:var(--tx)}
+.mm-g .edc.sin .sub b{color:var(--red)}
+.mm-tot{display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding:12px 14px;border-radius:10px;background:var(--b1);color:var(--b8);font-weight:700}
+.mm-tot b{font-family:var(--f-num);font-size:20px}
+.mm .chk{margin:14px 0 4px;font-size:15px}
+.mm-go{width:100%;height:52px;font-size:17px;margin-top:12px;border-radius:12px}
+.mm-v{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:var(--card)}
+.mm-v.anul{opacity:.55}
+.mm-v .h{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:14px}
+.mm-v .h .sp{flex:1}
+.mm-v .ib{width:38px;height:38px}
+.mm-v .q{margin-top:6px}
+/* ---- celular ---- */
+@media (max-width:600px){
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .stat .v{font-size:20px}
+  .r2c{grid-template-columns:minmax(0,1fr)}
+  .rc{padding:8px!important;gap:8px!important}
+  .rc .rbox-b input{flex:1 1 90px}
+  .rc .rbox-b select{flex:1 1 120px}
+  .rc .btn.sm{padding:7px 12px;font-size:13px}
+  .rc input,.rc select{padding:7px 8px;font-size:14px}
+  .rc .rbox-h{flex-wrap:wrap}
+  .rc .rbox-h .radios{flex-wrap:wrap;justify-content:flex-start}
+  .rc .vq{flex-wrap:wrap}
+  .rc .tbox .bigv{font-size:14px}
+  .rtop{flex-wrap:wrap;row-gap:8px}
+  .tw{-webkit-overflow-scrolling:touch}
+  .chip button{min-width:26px;min-height:22px}
+}
 
 .frame:has(.rc){padding-top:12px}
 .frame:has(.rc) .phead,.frame:has(.rc) .foot{display:none}
@@ -1492,6 +1534,32 @@ function delUser(i){if(!isAdm())return toast('Solo el administrador puede elimin
 
 /* ================= VENTA MAYORISTA ================= */
 const MAY_SIDE=[['may','receipt','Venta Mayorista'],['mrend','clip','Rendición Mayorista'],['mcta','users','Cuenta Clientes']];
+const MOB=()=>matchMedia('(max-width:600px)').matches;
+let _mob=null;addEventListener('resize',()=>{const m=MOB();if(_mob!==null&&m!==_mob&&S.view==='may'){_mob=m;render();}else _mob=m;});
+function mqStep(b,d){const i=b.parentNode.querySelector('input');i.value=Math.max(0,num(i.value)+d)||'';mqTot();}
+function mqTot(){const e=$('#mqtot');if(!e)return;const c=findCli(($('#mcli')||{}).value);let t=0,n=0;
+  $$('[data-mq]').forEach(el=>{const q=num(el.value);el.closest('.edc')&&el.closest('.edc').classList.toggle('on',q>0);if(!q)return;n+=q;t+=q*(c?precioCli(c,el.dataset.mq):precioBase(P(el.dataset.mq)));});
+  e.textContent=c?money(t):'Elige cliente';const k=$('#mqn');if(k)k.textContent=n+' cilindro'+(n===1?'':'s');}
+function mayMob(ps,CL,fv,ult){
+  const card=p=>`<div class="edc ${p.stock<=0?'sin':''}"><div class="t">${colLbl(p)}</div>
+    <div class="pm"><button type="button" onclick="mqStep(this,-1)">−</button><input class="ei" type="number" min="0" inputmode="numeric" placeholder="0" data-mq="${p.id}" oninput="mqTot()"><button type="button" onclick="mqStep(this,1)">+</button></div>
+    <div class="sub">Bodega: <b>${p.stock}</b></div></div>`;
+  const vc=v=>`<div class="mm-v ${v.anulada?'anul':''}"><div class="h"><b>N° ${v.num}</b><span class="hint">${v.hora.slice(0,5)}</span><b>${esc(v.cliente)}</b><span class="sp"></span>
+    ${v.anulada?'<span class="badge red">Anulada</span>':pastLock(v.fecha)?LOCKI:`<button class="ib" title="Editar venta" onclick="editVentaM('m',${v.id})">${ic('edit')}</button><button class="ib red" title="Eliminar venta" onclick="delVentaM('m',${v.id})">${ic('trash')}</button>`}</div>
+    <div class="q">${qtyTxt(v)}${v.editada?' <span class="hint">· editada</span>':''}</div>${v.obs?`<div class="hint">${esc(v.obs)}</div>`:''}</div>`;
+  return `<div class="mm"><div class="sect">NUEVA VENTA MAYORISTA</div>
+    <label class="mm-l" for="mcli">Cliente</label><select id="mcli" onchange="mqTot()"><option value="">Selecciona un cliente</option>${CL.slice().sort((x,y)=>x.nombre.localeCompare(y.nombre)).map(c=>`<option>${esc(c.nombre)}</option>`).join('')}</select>
+    <div class="mm-row"><div style="flex:1;min-width:0"><label class="mm-l" for="mfe">Fecha</label><input id="mfe" type="date" value="${fv}"></div>
+      <button class="btn" onclick="S.mver=$('#mfe').value||today();S.medit=null;render()">${ic('search')}Ver</button></div>
+    <span class="mm-l">Cantidades</span>
+    <div class="mm-g">${ps.map(card).join('')}</div>
+    <div class="mm-tot"><span>Total · <span id="mqn">0 cilindros</span></span><b id="mqtot">Elige cliente</b></div>
+    <label class="chk"><input type="checkbox" id="mvac" checked> El cliente entrega vacíos a cambio</label>
+    <span class="mm-l">Observación</span><input id="mobs" placeholder="Ej: guía N° 1234">
+    <button class="btn primary mm-go" onclick="grabarMay()">Grabar venta mayorista</button>
+    <p class="stitle" style="margin-top:24px">${fv===today()?'Ventas mayoristas de hoy':'Ventas mayoristas del '+dmy(fv)}${fv!==today()?` <button class="btn sm no-print" style="margin-left:8px" onclick="S.mver=null;render()">Volver a hoy</button>`:''}</p>
+    ${ult.length?ult.map(vc).join(''):`<p class="empty" style="text-align:center;padding:16px">${fv===today()?'Hoy aún no hay ventas mayoristas.':'No hay ventas mayoristas ese día.'}</p>`}</div>`;
+}
 const mayf=c=>frame(S.view==='mcta'?'Cuenta Clientes':'Venta Mayorista','home',MAY_SIDE,c);
 const MEDIOS=['Efectivo','Transferencia','Cheque','Transbank','Otro'];
 const normCli=x=>String(x||'').trim().replace(/\s+/g,' ').toUpperCase();
@@ -1514,6 +1582,7 @@ const qtyTxt=v=>Object.keys(v.items).map(id=>`<span class="chip">${v.items[id]} 
 function vMay(){
   const ps=db.products,fv=S.mver||today(),ult=db.mayor.ventas.filter(v=>v.fecha===fv).reverse(),CL=db.mayor.clientes;
   if(!CL.length)return mayf(`<div class="sect">NUEVA VENTA MAYORISTA</div><p class="empty" style="padding:30px;text-align:center">Aún no hay clientes mayoristas.<br>Créalos en <b>Configuración → Clientes</b>.<br><br>${canView('clientes')?`<button class="btn primary" onclick="go('clientes')">Ir a Clientes</button>`:'Pídele a un administrador que los cree.'}</p>`);
+  _mob=MOB();if(_mob)return mayf(mayMob(ps,CL,fv,ult));
   return mayf(`<div class="sect">NUEVA VENTA MAYORISTA</div>
     <div class="frm" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">
       <label style="flex:1;min-width:220px">Cliente<select id="mcli"><option value="">Selecciona un cliente</option>${CL.slice().sort((x,y)=>x.nombre.localeCompare(y.nombre)).map(c=>`<option>${esc(c.nombre)}</option>`).join('')}</select></label>

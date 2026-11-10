@@ -793,7 +793,7 @@ function psOf(u){
   const sucs=(Array.isArray(u.sucs)&&u.sucs.length)?u.sucs:SUCS;
   const o={};sucs.forEach(x=>o[x]=base.slice());return o;
 }
-function can(k){const u=curUser();if(!u)return false;if(u.rol==='admin')return true;if(k==='users')return false;if(k==='inf'&&S.infOk)return true;
+function can(k){const u=curUser();if(!u)return false;if(u.rol==='admin')return true;if(k==='*admin')return false;if(k==='users')return false;if(k==='inf'&&S.infOk)return true;
   if(GLOBALP.includes(k))return (u.perms||[]).includes(k);
   return ((psOf(u)[S.user.suc])||[]).includes(k);}
 const canView=v=>!VIEWP[v]||can(VIEWP[v]);
@@ -904,7 +904,7 @@ function vCaja(){
   const users=[...new Set(db.ventas.map(v=>v.usuario).concat(USERS.map(u=>u.nombre)))];
   const rows=[...vs.map(v=>({t:v.fecha+v.hora,h:`<tr class="${v.anulada?'anul':''}">
       <td><button class="ib" title="Imprimir" onclick="printVenta(${v.id})">${ic('print')}</button></td>
-      <td>${v.anulada?'':`<button class="ib red" title="Anular" onclick="anular(${v.id})">${ic('x')}</button>`}</td>
+      <td>${v.anulada?'':pastLock(v.fecha)?'🔒':`<button class="ib red" title="Anular" onclick="anular(${v.id})">${ic('x')}</button>`}</td>
       <td>${v.num}</td><td>${v.hora}</td><td>${esc(v.usuario)}</td><td>Local</td>
       ${ps.map(p=>`<td class="${p.tipo==='c'?'cat':''}">${v.items[p.id]||''}</td>`).join('')}<td class="r"><b>${money(v.total)}</b></td><td>-</td></tr>`})),
     ...ms.map(m=>({t:m.fecha+m.hora,h:`<tr><td></td><td></td><td>-</td><td>${m.hora}</td><td>${esc(m.usuario)}</td><td><span class="badge ${m.tipo==='Retiro'?'red':'ok'}">${m.tipo}</span></td>
@@ -923,7 +923,7 @@ function vCaja(){
 }
 function anular(id,ok){
   if(!can('anular'))return toast('No tienes permiso para anular ventas.','err');
-  const v=db.ventas.find(x=>x.id===id);if(!v||v.anulada)return;
+  const v=db.ventas.find(x=>x.id===id);if(!v||v.anulada)return;if(pastLock(v.fecha))return toast('Día cerrado: solo un administrador puede modificar ventas o rendiciones de días anteriores.','err');
   if(!ok)return ask('¿Anular la venta N° '+v.num+'? El stock se devolverá.',()=>anular(id,1));
   for(const k in v.items){const p=P(k);if(p)p.stock+=v.items[k];}
   for(const g in (v.vac||{}))db.vacios[g]=Math.max(0,(db.vacios[g]||0)-v.vac[g]);
@@ -1004,7 +1004,7 @@ function ventasHoyTbl(){
     <td class="r"><b>${money(v.total)}</b>${v.editada?`<div class="hint">editada</div>`:''}</td>
     <td class="no-print" style="white-space:nowrap">${v.anulada?'<span class="badge red">Anulada</span>':ed
       ?`<button class="btn primary sm" onclick="saveEditVenta(${v.id})">${ic('check')}Guardar</button> <button class="btn sm" onclick="S.vedit=null;render()">Cancelar</button>`
-      :`<button class="ib" title="Editar venta" onclick="editVentaM('l',${v.id})">${ic('edit')}</button> <button class="ib red" title="Eliminar venta" onclick="delVentaM('l',${v.id})">${ic('trash')}</button>`}</td></tr>`;}).join('')
+      :pastLock(v.fecha)?LOCKI:`<button class="ib" title="Editar venta" onclick="editVentaM('l',${v.id})">${ic('edit')}</button> <button class="ib red" title="Eliminar venta" onclick="delVentaM('l',${v.id})">${ic('trash')}</button>`}</td></tr>`;}).join('')
     :`<tr><td colspan="${ps.length+5}" class="empty">Aún no hay ventas hoy</td></tr>`}
   </table></div>`;
 }
@@ -1013,11 +1013,13 @@ function closeEdM(){const m=document.querySelector('.modal.edm');if(m)m.remove()
 function delVentaM(k,id){
   if(!can('anular'))return toast('No tienes permiso para eliminar ventas.','err');
   const v=(k==='l'?db.ventas:db.mayor.ventas).find(x=>x.id===id);if(!v||v.anulada)return;
+  if(pastLock(v.fecha))return toast('Día cerrado: solo un administrador puede modificar ventas o rendiciones de días anteriores.','err');
   ask(`¿Eliminar la venta N° ${v.num}${v.cliente?' de '+v.cliente:''}? Los cilindros vuelven a bodega.`,()=>{closeEdM();
     if(k==='l')anular(id,1);else anularMay(id,1);});
 }
 function editVentaM(k,id){
   const L=k==='l',v=(L?db.ventas:db.mayor.ventas).find(x=>x.id===id);if(!v||v.anulada)return;
+  if(pastLock(v.fecha))return toast('Día cerrado: solo un administrador puede modificar ventas o rendiciones de días anteriores.','err');
   const ps=db.products,c=L?null:findCli(v.cliente);
   const pr=pid=>v.precios[pid]!=null?v.precios[pid]:(L?precio(P(pid)):(c?precioCli(c,pid):precioBase(P(pid))));
   const pe=pid=>(v.penv||{})[pid]!=null?v.penv[pid]:P(pid).envase;
@@ -1040,7 +1042,7 @@ function editVentaM(k,id){
 }
 function edStep(b,d){const i=b.parentNode.querySelector('input');i.value=Math.max(0,num(i.value)+d)||'';edTot();}
 function saveEditVenta(id){
-  const v=db.ventas.find(x=>x.id===id);if(!v||v.anulada)return;
+  const v=db.ventas.find(x=>x.id===id);if(!v||v.anulada)return;if(pastLock(v.fecha))return toast('Día cerrado: solo un administrador puede modificar ventas o rendiciones de días anteriores.','err');
   const ni={},ne={};$$('[data-ei]').forEach(el=>{const n=num(el.value);if(n)ni[el.dataset.ei]=n;});$$('[data-ee]').forEach(el=>{const n=num(el.value);if(n)ne[el.dataset.ee]=n;});
   if(!Object.keys(ni).length&&!Object.keys(ne).length)return toast('La venta debe tener al menos una cantidad. Si no corresponde, anúlala.','err');
   for(const p of db.products){const d=(ni[p.id]||0)-(v.items[p.id]||0);if(d>p.stock)return toast(`Stock insuficiente de ${colLbl(p)} (hay ${p.stock})`,'err');}
@@ -1121,10 +1123,10 @@ const abonosR=(f1,f2)=>db.mayor.abonos.filter(a=>!a.anulado&&mrOk(S.mrcli||'')(a
 function mrAuto(){if(!MKEY()||S.rfecha2)return;const d=String(S.rfecha).slice(0,10);
   const ks=db.mayor.ventas.filter(v=>!v.anulada&&v.fecha===d&&mrOk(S.mrcli)(v.cliente)).map(rkV).sort();S.rfecha=ks.length?ks[ks.length-1]:d;}
 function mrVentaSel(){
-  const d=String(S.rfecha).slice(0,10),vs=db.mayor.ventas.filter(v=>v.fecha===d&&mrOk(S.mrcli)(v.cliente)).sort((a,b)=>a.num-b.num);
-  return `${vs.map(v=>{const k=rkV(v),n=Object.values(v.items).reduce((a,x)=>a+x,0);
-      return `<button class="vch ${S.rfecha===k?'on':''} ${v.anulada?'an':''}" onclick="S.rfecha='${k}';render()">Venta N° ${v.num}<small>${v.hora.slice(0,5)} · ${n} cilindro${n===1?'':'s'}${v.anulada?' · anulada':''}</small></button>`;}).join('')}
-    <button class="vch ${S.rfecha===d?'on':''}" onclick="S.rfecha='${d}';render()">${vs.length?'Solo pagos':'Sin ventas este día'}</button>`;
+  const d=String(S.rfecha).slice(0,10),vs=db.mayor.ventas.filter(v=>v.fecha===d&&mrOk(S.mrcli)(v.cliente)&&!v.anulada).sort((a,b)=>a.num-b.num);
+  return `${vs.map((v,i)=>{const k=rkV(v),n=Object.values(v.items).reduce((a,x)=>a+x,0);
+      return `<button class="vch ${S.rfecha===k?'on':''}" title="Venta N° ${v.num}" onclick="S.rfecha='${k}';render()">${i+1}° compra<small>${v.hora.slice(0,5)} · ${n} cil.</small></button>`;}).join('')}
+    <button class="vch ${S.rfecha===d?'on':''}" onclick="S.rfecha='${d}';render()">${vs.length?'Solo abonos':'Sin compras este día'}</button>`;
 }
 const mrCli=()=>S.mrcli&&S.mrcli!==MLEG?findCli(S.mrcli):null;
 const mrPrecio=p=>{const c=mrCli();return c?precioCli(c,p.id):precioBase(p);};
@@ -1189,6 +1191,9 @@ const rad=(k,f,opts)=>`<div class="radios">${opts.map((o,i)=>`<label title="${o}
 const vq=k=>`<div class="vq">${VSIZES.map(s=>`<label>${s}<input data-k="${k}" data-f="q${s}" type="number" inputmode="numeric" placeholder="0"></label>`).join('')}</div>`;
 const RCAT={efectivo:'ing',vuelto:'ing',vales:'val',valesCil:'val',cheques:'ban',transf:'ban',transbank:'ban',descuentos:'res',gastos:'res',petroleo:'res',cargos:'car'};
 const multiR=()=>!!S.rfecha2&&S.rfecha2!==S.rfecha;
+const pastLock=f=>!!S.user&&!can('*admin')&&String(f||'').slice(0,10)<today();
+const rLock=()=>pastLock(S.rfecha);
+const LOCKI=`<span class="badge" title="Día cerrado: solo un administrador puede modificar">🔒 Cerrado</span>`;
 function rDates(){const f1=S.rfecha,f2=S.rfecha2||f1;return Object.keys(RR()).filter(d=>rng(d,f1,f2)).sort();}
 function calcRange(f1,f2){
   const fechas=new Set([...RV().map(v=>v.rk||v.fecha),...RM().map(m=>m.fecha),...Object.keys(RR())]);
@@ -1200,25 +1205,27 @@ function sec(k,title,fields,btn='Agregar'){
   const it=[],m=multiR();rDates().forEach(f=>(RR()[f][k]||[]).forEach(e=>it.push({e,f})));
   const tot=it.reduce((a,x)=>a+val(k,x.e),0);
   return `<div class="rbox k-${RCAT[k]||'otro'}"><div class="rbox-h">${title}<span class="tot">TOTAL: ${money(tot)}</span></div>
-    ${m?'':`<div class="rbox-b no-print">${fields}<button class="btn sm" onclick="addR('${k}')">${btn}</button></div>`}
-    ${it.length?`<div class="chips">${it.map(x=>`<span class="chip">${m?`<b>${dmy(x.f).slice(0,5)}</b> `:''}${desc(k,x.e)} <b>${money(val(k,x.e))}</b><button class="no-print" onclick="delR('${k}',${x.e.id},'${x.f}')">✕</button></span>`).join('')}</div>`:''}</div>`;
+    ${m||rLock()?'':`<div class="rbox-b no-print">${fields}<button class="btn sm" onclick="addR('${k}')">${btn}</button></div>`}
+    ${it.length?`<div class="chips">${it.map(x=>`<span class="chip">${m?`<b>${dmy(x.f).slice(0,5)}</b> `:''}${desc(k,x.e)} <b>${money(val(k,x.e))}</b>${pastLock(x.f)?'':`<button class="no-print" onclick="delR('${k}',${x.e.id},'${x.f}')">✕</button>`}</span>`).join('')}</div>`:''}</div>`;
 }
 function secAbonos(){
   const m=multiR(),it=abonosR(S.rfecha,S.rfecha2||S.rfecha),tot=it.reduce((a,x)=>a+x.monto,0);
   const cl=[...new Set([...db.mayor.clientes.map(c=>c.nombre),...mClientes().map(c=>c.cliente)])].sort();
   return `<div class="rbox k-ing"><div class="rbox-h">${S.mrcli&&S.mrcli!==MLEG?'ABONOS DEL CLIENTE':'ABONOS DE CLIENTES'}<span class="tot">TOTAL: ${money(tot)}</span></div>
-    ${m||S.mrcli===MLEG?'':`<div class="rbox-b no-print">
+    ${m||S.mrcli===MLEG||rLock()?'':`<div class="rbox-b no-print">
       <input id="rab-mo" type="number" inputmode="numeric" placeholder="Monto $"><select id="rab-me">${MEDIOS.map(x=>`<option>${x}</option>`).join('')}</select>
       <input id="rab-det" class="w" placeholder="Detalle"><button class="btn sm" onclick="addAbonoR()">Agregar</button></div>`}
-    ${it.length?`<div class="chips">${it.map(a=>`<span class="chip">${m?`<b>${dmy(a.fecha).slice(0,5)}</b> `:''}${esc(a.cliente)} · ${esc(a.medio)}${a.det?' '+esc(a.det):''} <b>${money(a.monto)}</b><button class="no-print" onclick="anularAbono(${a.id})">✕</button></span>`).join('')}</div>`:''}</div>`;
+    ${it.length?`<div class="chips">${it.map(a=>`<span class="chip">${m?`<b>${dmy(a.fecha).slice(0,5)}</b> `:''}${esc(a.cliente)} · ${esc(a.medio)}${a.det?' '+esc(a.det):''} <b>${money(a.monto)}</b>${pastLock(a.fecha)?'':`<button class="no-print" onclick="anularAbono(${a.id})">✕</button>`}</span>`).join('')}</div>`:''}</div>`;
 }
 function addAbonoR(){
+  if(rLock())return toast('Día cerrado: solo un administrador puede modificar ventas o rendiciones de días anteriores.','err');
   const cli=normCli(S.mrcli===MLEG?'':S.mrcli),mo=num($('#rab-mo').value);
   if(!cli)return toast('Elige el cliente','err');if(!mo)return toast('Ingresa un monto','err');
   db.mayor.abonos.push({id:Date.now(),fecha:String(S.rfecha).slice(0,10),rk:S.rfecha,hora:hora(),usuario:S.user.nombre,cliente:cli,monto:mo,medio:$('#rab-me').value,det:$('#rab-det').value.trim(),anulado:false});
   save();toast('Abono agregado ✔');render();
 }
 function addR(k){
+  if(rLock())return toast('Día cerrado: solo un administrador puede modificar ventas o rendiciones de días anteriores.','err');
   const o={};
   $$(`[data-k="${k}"]`).forEach(el=>{
     if(el.type==='radio'){if(el.checked)o[el.dataset.f]=el.value;}
@@ -1230,12 +1237,13 @@ function addR(k){
   if(k==='vales'){o.com=isM()?comVale({...o,com:undefined}):0;}
   getRend(S.rfecha)[k].push({...o,id:Date.now()});save();toast('Agregado ✔');render();
 }
-function delR(k,id,f){const R=getRend(f||S.rfecha);R[k]=R[k].filter(e=>e.id!==id);save();render();}
-function saveObs(){getRend(S.rfecha).obs=$('#robs').value;save();toast('Observaciones guardadas ✔');}
+function delR(k,id,f){if(pastLock(f||S.rfecha))return toast('Día cerrado: solo un administrador puede modificar ventas o rendiciones de días anteriores.','err');const R=getRend(f||S.rfecha);R[k]=R[k].filter(e=>e.id!==id);save();render();}
+function saveObs(){if(rLock())return toast('Día cerrado: solo un administrador puede modificar ventas o rendiciones de días anteriores.','err');getRend(S.rfecha).obs=$('#robs').value;save();toast('Observaciones guardadas ✔');}
 function vRend(){
   if(!MKEY()&&String(S.rfecha).includes('#'))S.rfecha=String(S.rfecha).slice(0,10);
+  if(MKEY()&&String(S.rfecha).includes('#')&&!db.mayor.ventas.some(v=>!v.anulada&&rkV(v)===S.rfecha)){S.rfecha=String(S.rfecha).slice(0,10);mrAuto();}
   if(isM()&&!S.mrcli)return frame('Rendición Mayorista','may',null,`
-    <div class="rtop" style="flex-wrap:wrap"><span class="rtt">Rendición Mayorista · ${esc(S.user.suc)}</span><button class="btn sm no-print" onclick="go('may')">Venta Mayorista</button>${canView('mcta')?`<button class="btn sm no-print" onclick="go('mcta')">Cuenta Clientes</button>`:''}</div>
+    <div class="rtop" style="flex-wrap:wrap"><span class="rtt">Rendición Mayorista · ${esc(S.user.suc)}</span>${canView('mcta')?`<button class="btn sm no-print" onclick="go('mcta')">Cuenta Clientes</button>`:''}</div>
     <div class="mrbar no-print"><div class="row"><span class="lbl">CLIENTE</span>${mrClientesSel()}</div></div>
     <p class="empty" style="padding:50px 20px;text-align:center">Cada cliente mayorista tiene su propia cuadratura.<br><b>Elige un cliente</b> arriba para ver o hacer su rendición.</p>
     <div class="rfoot no-print"><button class="btn" onclick="go('may')">Volver</button></div>`,true);
@@ -1249,14 +1257,11 @@ function vRend(){
   const row=(t,fn,cls='')=>`<tr class="${cls}"><td class="l"><b>${t}</b></td>${ps.map(p=>`<td class="${p.tipo==='c'?'cat':''}">${fn(p)}</td>`).join('')}</tr>`;
   const MY=isM();
   return frame(MY?'Rendición Mayorista':'Rendición',MY?'may':'home',null,`
-    <div class="rtop" style="flex-wrap:wrap"><span class="rtt">${MY?'Rendición Mayorista':'Rendición'} · ${esc(S.user.suc)}</span>${MY?`<span class="rtt mr-pcli" style="display:none">· ${esc(S.mrcli===MLEG?'Anteriores':S.mrcli)}${String(f).includes('#')?' · Venta N° '+Number(String(f).split('#')[1]):''}</span>`:''}${MY?`<button class="btn sm no-print" onclick="go('may')">Venta Mayorista</button>${canView('mcta')?`<button class="btn sm no-print" onclick="go('mcta')">Cuenta Clientes</button>`:''}`:''}FECHA MOVIMIENTO &nbsp; Desde <input type="date" id="rf" value="${String(f).slice(0,10)}"> Hasta <input type="date" id="rf2" value="${S.rfecha2||''}">
+    <div class="rtop" style="flex-wrap:wrap"><span class="rtt">${MY?'Rendición Mayorista':'Rendición'} · ${esc(S.user.suc)}</span>${MY?`<span class="rtt mr-pcli" style="display:none">· ${esc(S.mrcli===MLEG?'Anteriores':S.mrcli)}${String(f).includes('#')?' · Venta N° '+Number(String(f).split('#')[1]):''}</span>`:''}${MY?`${canView('mcta')?`<button class="btn sm no-print" onclick="go('mcta')">Cuenta Clientes</button>`:''}`:''}FECHA MOVIMIENTO &nbsp; Desde <input type="date" id="rf" value="${String(f).slice(0,10)}"> Hasta <input type="date" id="rf2" value="${S.rfecha2||''}">
       <button class="btn sm" onclick="S.rfecha=$('#rf').value||today();S.rfecha2=$('#rf2').value;if(S.rfecha2===S.rfecha)S.rfecha2='';mrAuto();render()">Ver</button>
       ${m?`<button class="btn sm" onclick="S.rfecha2='';render()">Solo un día</button>`:''}</div>
     ${MY?`<div class="mrbar no-print"><div class="row"><span class="lbl">CLIENTE</span>${mrClientesSel()}</div>
-      ${MKEY()&&!m?`<div class="row"><span class="lbl">VENTA</span>${mrVentaSel()}</div>`:''}</div>`:''}
-    ${ant&&!hist?`<div class="alert" style="margin:12px 12px 0;background:var(--ok1);border-color:var(--ok1);color:var(--ok)">${ic('check')}<span>El saldo de ${MKEY()?'ventas anteriores':'días anteriores'} (${money(ant)}) quedó abonado. Pendiente total: $ 0.</span></div>`:''}
-    ${ant&&hist?`<div class="alert" style="margin:12px 12px 0;${ant<0?'background:var(--b1);border-color:var(--b2);color:var(--b8)':'background:var(--red1);border-color:var(--red1);color:var(--red)'}">${ic('alert')}<span>Hay un <b>saldo ${ant>0?'en contra':'a favor'} de ${MKEY()?'ventas anteriores':'días anteriores'} de ${money(Math.abs(ant))}</b>${ant>0?' (falta por rendir)':' (sobrante)'}. Queda guardado y se suma hasta que lo abones y llegue a $ 0.</span></div>`:''}
-    ${m?`<div class="alert" style="margin:12px 12px 0">${ic('alert')}Mostrando del ${dmy(f)} al ${dmy(f2)}. Para agregar pagos o gastos, elige un solo día.</div>`:''}
+      ${MKEY()&&!m?`<div class="row"><span class="lbl">COMPRAS DEL DÍA</span>${mrVentaSel()}</div>`:''}</div>`:''}
     <div class="rgrid rc"><div>
       <div class="tw"><table>
         <tr><th class="l"></th>${ps.map(p=>`<th class="${p.tipo==='c'?'cat':''}">${p.id}</th>`).join('')}</tr>
@@ -1268,7 +1273,7 @@ function vRend(){
       <div class="rleft2">
         <div>
           ${sec('cargos','CARGOS',inp('cargos','monto','Monto $')+inp('cargos','nro','N°',0,'text'))}
-          <div class="rbox k-obs"><div class="rbox-h">OBSERVACIONES</div><div class="rbox-b">${m?(rDates().filter(x=>RR()[x].obs).map(x=>`<div style="width:100%;font-weight:500"><b>${dmy(x)}:</b> ${esc(RR()[x].obs)}</div>`).join('')||'<span class="hint">Sin observaciones</span>'):`<textarea id="robs">${esc(R.obs)}</textarea><button class="btn sm no-print" onclick="saveObs()">Guardar</button>`}</div></div>
+          <div class="rbox k-obs"><div class="rbox-h">OBSERVACIONES</div><div class="rbox-b">${m?(rDates().filter(x=>RR()[x].obs).map(x=>`<div style="width:100%;font-weight:500"><b>${dmy(x)}:</b> ${esc(RR()[x].obs)}</div>`).join('')||'<span class="hint">Sin observaciones</span>'):rLock()?(R.obs?`<div style="width:100%;font-weight:500">${esc(R.obs)}</div>`:'<span class="hint">Sin observaciones</span>'):`<textarea id="robs">${esc(R.obs)}</textarea><button class="btn sm no-print" onclick="saveObs()">Guardar</button>`}</div></div>
         </div>
         <div><table class="tbox">
           <tr><th>TOTAL ($)</th><th>TOTAL (Kilos)</th><th>TOTAL (Tarros)</th></tr>
@@ -1507,12 +1512,13 @@ const precioCli=(c,id)=>esEsp(c)?((c.esp&&c.esp[id])||precioBase(P(id))):precioL
 const findCli=n=>db.mayor.clientes.find(c=>c.nombre===normCli(n));
 const qtyTxt=v=>Object.keys(v.items).map(id=>`<span class="chip">${v.items[id]} × ${colLbl(P(id))}</span>`).join('');
 function vMay(){
-  const ps=db.products,ult=db.mayor.ventas.slice().reverse().slice(0,20),CL=db.mayor.clientes;
+  const ps=db.products,fv=S.mver||today(),ult=db.mayor.ventas.filter(v=>v.fecha===fv).reverse(),CL=db.mayor.clientes;
   if(!CL.length)return mayf(`<div class="sect">NUEVA VENTA MAYORISTA</div><p class="empty" style="padding:30px;text-align:center">Aún no hay clientes mayoristas.<br>Créalos en <b>Configuración → Clientes</b>.<br><br>${canView('clientes')?`<button class="btn primary" onclick="go('clientes')">Ir a Clientes</button>`:'Pídele a un administrador que los cree.'}</p>`);
   return mayf(`<div class="sect">NUEVA VENTA MAYORISTA</div>
     <div class="frm" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">
       <label style="flex:1;min-width:220px">Cliente<select id="mcli"><option value="">Selecciona un cliente</option>${CL.slice().sort((x,y)=>x.nombre.localeCompare(y.nombre)).map(c=>`<option>${esc(c.nombre)}</option>`).join('')}</select></label>
-      <label>Fecha<input id="mfe" type="date" value="${today()}"></label></div>
+      <label>Fecha<input id="mfe" type="date" value="${S.mver||today()}"></label>
+      <button class="btn" style="align-self:flex-end" onclick="S.mver=$('#mfe').value||today();S.medit=null;render()">${ic('search')}Ver</button></div>
     <div class="tw blk"><table>
       <tr><th class="l"></th>${ps.map(p=>`<th>${colLbl(p)}</th>`).join('')}</tr>
       <tr class="sec"><td class="l"><b>CANTIDAD</b></td>${ps.map(p=>`<td><input class="ei" type="number" min="0" inputmode="numeric" placeholder="0" data-mq="${p.id}"></td>`).join('')}</tr>
@@ -1523,18 +1529,18 @@ function vMay(){
       <label style="flex:1;min-width:200px;display:flex;gap:8px;align-items:center">Observación<input id="mobs" style="flex:1" placeholder="Ej: guía N° 1234"></label>
       <button class="btn primary" style="padding:10px 24px" onclick="grabarMay()">Grabar venta mayorista</button></div>
     <p class="hint">El precio se aplica solo según el cliente y se ve en la Rendición Mayorista.</p>
-    <p class="stitle" style="margin-top:24px">Últimas ventas mayoristas</p>
+    <p class="stitle" style="margin-top:24px">${fv===today()?"Ventas mayoristas de hoy":"Ventas mayoristas del "+dmy(fv)}${fv!==today()?` <button class="btn sm no-print" style="margin-left:8px" onclick="S.mver=null;render()">Volver a hoy</button>`:""}</p>
     <div class="tw"><table><tr><th>N°</th><th>FECHA</th><th>HORA</th><th class="l">CLIENTE</th><th class="l">CILINDROS</th><th>USUARIO</th><th class="no-print"></th></tr>
     ${ult.length?ult.map(v=>{const ed=S.medit===v.id&&!v.anulada;return `<tr class="${v.anulada?'anul':''}"><td>${v.num}</td><td>${dmy(v.fecha)}</td><td>${v.hora}</td><td class="l"><b>${esc(v.cliente)}</b>${v.obs?`<div class="hint">${esc(v.obs)}</div>`:''}</td>
       <td class="l" style="white-space:normal">${ed?ps.map(p=>`<label style="display:inline-flex;align-items:center;gap:4px;margin:2px 8px 2px 0"><b>${colLbl(p)}</b><input class="ei" style="width:56px;text-align:center" type="number" min="0" inputmode="numeric" placeholder="0" data-mei="${p.id}" value="${v.items[p.id]||''}"></label>`).join(''):qtyTxt(v)}${v.editada&&!ed?' <span class="hint">· editada</span>':''}</td><td>${esc(v.usuario)}</td>
       <td class="no-print" style="white-space:nowrap">${v.anulada?'<span class="badge red">Anulada</span>':ed
         ?`<button class="btn primary sm" onclick="saveEditMay(${v.id})">${ic('check')}Guardar</button> <button class="btn sm" onclick="S.medit=null;render()">Cancelar</button>`
-        :`<button class="ib" title="Editar venta" onclick="editVentaM('m',${v.id})">${ic('edit')}</button> <button class="ib red" title="Eliminar venta" onclick="delVentaM('m',${v.id})">${ic('trash')}</button>`}</td></tr>`;}).join('')
-      :'<tr><td colspan="7" class="empty">Aún no hay ventas mayoristas</td></tr>'}
+        :pastLock(v.fecha)?LOCKI:`<button class="ib" title="Editar venta" onclick="editVentaM('m',${v.id})">${ic('edit')}</button> <button class="ib red" title="Eliminar venta" onclick="delVentaM('m',${v.id})">${ic('trash')}</button>`}</td></tr>`;}).join('')
+      :'<tr><td colspan="7" class="empty">'+(fv===today()?'Hoy aún no hay ventas mayoristas.':'No hay ventas mayoristas ese día.')+' Elige otra fecha y presiona <b>Ver</b>.</td></tr>'}
     </table></div>`);
 }
 function saveEditMay(id){
-  const v=db.mayor.ventas.find(x=>x.id===id);if(!v||v.anulada)return;
+  const v=db.mayor.ventas.find(x=>x.id===id);if(!v||v.anulada)return;if(pastLock(v.fecha))return toast('Día cerrado: solo un administrador puede modificar ventas o rendiciones de días anteriores.','err');
   const ni={};$$('[data-mei]').forEach(el=>{const n=num(el.value);if(n)ni[el.dataset.mei]=n;});
   if(!Object.keys(ni).length)return toast('La venta debe tener al menos una cantidad. Si no corresponde, anúlala.','err');
   for(const p of db.products){const d=(ni[p.id]||0)-(v.items[p.id]||0);if(d>p.stock)return toast(`No hay suficientes ${colLbl(p)} en bodega (hay ${p.stock})`,'err');}
@@ -1545,6 +1551,7 @@ function saveEditMay(id){
   S.medit=null;closeEdM();save();toast('Venta mayorista N° '+v.num+' corregida ✔');render();
 }
 function grabarMay(){
+  if(pastLock($('#mfe').value))return toast('Solo un administrador puede grabar ventas con fecha de días anteriores.','err');
   const c=findCli($('#mcli').value);if(!c)return toast('Selecciona el cliente','err');
   const items={},precios={};let total=0;
   for(const p of db.products){const q=num($(`[data-mq="${p.id}"]`).value);if(!q)continue;
@@ -1655,7 +1662,7 @@ function delCli(id,ok){
   db.mayor.clientes=db.mayor.clientes.filter(x=>x.id!==id);save();toast('Cliente eliminado');render();
 }
 function anularMay(id,ok){
-  const v=db.mayor.ventas.find(x=>x.id===id);if(!v||v.anulada)return;
+  const v=db.mayor.ventas.find(x=>x.id===id);if(!v||v.anulada)return;if(pastLock(v.fecha))return toast('Día cerrado: solo un administrador puede modificar ventas o rendiciones de días anteriores.','err');
   if(!ok)return ask(`¿Anular la venta mayorista N° ${v.num} de ${v.cliente}? Los cilindros vuelven a bodega.`,()=>anularMay(id,1));
   for(const id2 in v.items){P(id2).stock+=v.items[id2];if(v.canje)db.vacios[grp(id2)]=Math.max(0,(db.vacios[grp(id2)]||0)-v.items[id2]);}
   v.anulada=true;save();toast('Venta mayorista anulada');render();
@@ -1713,6 +1720,7 @@ function grabarAbono(){
 }
 function anularAbono(id,ok){
   const a=db.mayor.abonos.find(x=>x.id===id);if(!a||a.anulado)return;
+  if(pastLock(a.fecha))return toast('Día cerrado: solo un administrador puede modificar ventas o rendiciones de días anteriores.','err');
   if(!ok)return ask(`¿Anular el abono de ${money(a.monto)} de ${a.cliente}?`,()=>anularAbono(id,1));
   a.anulado=true;save();toast('Abono anulado');render();
 }
@@ -2033,8 +2041,13 @@ function repSuc(suc,f1,f2){
     Object.keys(db.rend).filter(x=>x>=f1&&x<=f2).forEach(f=>{const R=db.rend[f];RKEYS.forEach(k=>g[k]+=sumK(R,k));});
     [((db.mayor&&db.mayor.rend)||{}),...Object.values((db.mayor&&db.mayor.rendc)||{})].forEach(RRc=>Object.keys(RRc).filter(x=>x>=f1&&x<=f2).forEach(f=>(RRc[f].vales||[]).forEach(e=>com+=comVale(e))));
     const stock={};db.products.forEach(p=>stock[p.id]=llenosTot(p.id));
+    const baseAt=(p,f)=>{const h=(db.phist||[]).filter(x=>x.campo==='mayor'&&x.prod===colLbl(p)&&x.fecha>f).sort((a,b)=>(a.fecha+a.hora).localeCompare(b.fecha+b.hora));return h.length?(h[0].antes||p.venta):precioBase(p);};
+    const gan={},ganV={},ganB={};let gdesc=0;db.products.forEach(p=>{gan[p.id]=0;ganV[p.id]=0;ganB[p.id]=0;});
+    r.vs.forEach(v=>{for(const id in v.items){const p=P(id);if(!p)continue;const q=v.items[id],pv=v.precios[id]||0,b=baseAt(p,v.fecha);
+      ganV[id]+=q*pv;ganB[id]+=q*b;gan[id]+=q*(pv-b);}gdesc+=v.desc||0;});
+    const mv=((db.mayor&&db.mayor.ventas)||[]).filter(v=>!v.anulada&&v.fecha>=f1&&v.fecha<=f2).map(v=>({...v,suc}));
     const byDay={};r.vs.forEach(v=>byDay[v.fecha]=(byDay[v.fecha]||0)+v.total);
-    return {suc,vs:r.vs,byDay,venta:r.venta,n:r.vs.length,units,monto,desc,env,g,com,rendido:r.rendido,saldo:r.saldo,
+    return {suc,mv,gan,ganV,ganB,gdesc,vs:r.vs,byDay,venta:r.venta,n:r.vs.length,units,monto,desc,env,g,com,rendido:r.rendido,saldo:r.saldo,
       kilos:db.products.reduce((a,p)=>a+(units[p.id]||0)*p.kg,0),tarros:Object.values(units).reduce((a,b)=>a+b,0),
       stock,llenos:Object.values(stock).reduce((a,b)=>a+b,0),vac:GROUPS.reduce((a,x)=>a+(db.vacios[x]||0),0)};
   });
@@ -2186,11 +2199,26 @@ function vInf(){
       ${tot?`<tr class="tot"><td class="l">TOTAL</td><td class="r">${money(T.venta)}</td><td class="r">${money(PV.venta)}</td><td>${T.tarros}</td><td>${T.kilos.toLocaleString('es-CL')}</td><td class="r">${money(T.desc)}</td><td class="r">${money(T.rendido)}</td><td class="r">${money(T.saldo)}</td></tr>`:''}
     </table></div>
 
+    ${can('*admin')||S.infOk?(()=>{const G={},GV={},GB={};let gd=0;PRODS.forEach(p=>{G[p.id]=0;GV[p.id]=0;GB[p.id]=0;});
+      list.forEach(r=>{PRODS.forEach(p=>{G[p.id]+=(r.gan||{})[p.id]||0;GV[p.id]+=(r.ganV||{})[p.id]||0;GB[p.id]+=(r.ganB||{})[p.id]||0;});gd+=r.gdesc||0;});
+      const sm=o=>Object.values(o||{}).reduce((a,b)=>a+b,0),gt=sm(G);
+      return tcap('Ganancias · venta local sobre precio base','t-gan',per+' · solo administradores')+`<p class="hint" style="margin:-4px 0 8px">Ganancia = (precio venta local − precio base mayorista de ese día) × cilindros vendidos. Descuentos = rebajas hechas en la venta.</p>
+      <div class="tw blk"><table id="t-gan"><tr><th class="l">Sucursal</th>${PRODS.map(p=>`<th>${colLbl(p)}</th>`).join('')}<th>Venta local</th><th>A precio base</th><th>Ganancia</th><th>Descuentos</th><th>Ganancia neta</th></tr>
+      ${list.map(r=>{const g=sm(r.gan);return `<tr><td class="l"><b>${r.suc}</b></td>${PRODS.map(p=>`<td class="r">${money((r.gan||{})[p.id]||0)}</td>`).join('')}<td class="r">${money(sm(r.ganV))}</td><td class="r">${money(sm(r.ganB))}</td><td class="r"><b>${money(g)}</b></td><td class="r">${money(r.gdesc||0)}</td><td class="r"><b style="color:var(--ok)">${money(g-(r.gdesc||0))}</b></td></tr>`;}).join('')}
+      ${tot?`<tr class="tot"><td class="l">TOTAL</td>${PRODS.map(p=>`<td class="r">${money(G[p.id])}</td>`).join('')}<td class="r">${money(sm(GV))}</td><td class="r">${money(sm(GB))}</td><td class="r">${money(gt)}</td><td class="r">${money(gd)}</td><td class="r">${money(gt-gd)}</td></tr>`:''}
+    </table></div>`;})():''}
+
     ${tcap('Cilindros vendidos por producto','t-prod',per)}
     <div class="tw blk"><table id="t-prod"><tr><th class="l">Sucursal</th>${PRODS.map(p=>`<th>${colLbl(p)}</th>`).join('')}<th>Total</th></tr>
       ${list.map(r=>`<tr><td class="l"><b>${r.suc}</b></td>${PRODS.map(p=>`<td class="n">${r.units[p.id]||0}</td>`).join('')}<td class="n"><b>${r.tarros}</b></td></tr>`).join('')}
       ${tot?`<tr class="tot"><td class="l">TOTAL</td>${PRODS.map(p=>`<td>${T.units[p.id]||0}</td>`).join('')}<td>${T.tarros}</td></tr>`:''}
     </table></div>
+
+    ${(()=>{const mv=list.flatMap(r=>r.mv||[]).sort((a,b)=>(a.fecha+a.hora).localeCompare(b.fecha+b.hora));
+      return tcap('Ventas mayoristas','t-may',per+' · '+mv.length+' venta'+(mv.length===1?'':'s'))+`<div class="tw blk"><table id="t-may"><tr><th>FECHA</th><th>HORA</th>${tot?'<th class="l">SUCURSAL</th>':''}<th>N°</th><th class="l">CLIENTE</th><th class="l">CILINDROS</th><th>TOTAL</th><th>USUARIO</th></tr>
+      ${mv.length?mv.map(v=>`<tr><td>${dmy(v.fecha)}</td><td>${v.hora}</td>${tot?`<td class="l">${v.suc}</td>`:''}<td>${v.num}</td><td class="l"><b>${esc(v.cliente)}</b>${v.obs?`<div class="hint">${esc(v.obs)}</div>`:''}</td><td class="l" style="white-space:normal">${Object.keys(v.items).map(id=>v.items[id]+' × '+(PRODS.find(p=>p.id===id)?colLbl(PRODS.find(p=>p.id===id)):id)).join(', ')}</td><td class="r">${money(v.total)}</td><td>${esc(v.usuario)}</td></tr>`).join('')
+        +`<tr class="tot"><td class="l" colspan="${tot?6:5}">TOTAL</td><td class="r">${money(mv.reduce((a,v)=>a+v.total,0))}</td><td></td></tr>`
+        :`<tr><td colspan="${tot?8:7}" class="empty">No hay ventas mayoristas en este período</td></tr>`}</table></div>`;})()}
 
     ${tcap('Stock actual','t-stock','llenos y vacíos en bodega, a hoy')}
     <div class="tw blk"><table id="t-stock"><tr><th class="l">Sucursal</th>${PRODS.map(p=>`<th>${colLbl(p)}</th>`).join('')}<th>Total llenos</th><th>Total vacíos</th></tr>

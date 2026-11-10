@@ -290,6 +290,16 @@ textarea{width:100%;min-height:100px;resize:vertical}
 .mm-v .h .sp{flex:1}
 .mm-v .ib{width:38px;height:38px}
 .mm-v .q{margin-top:6px}
+/* ---- deudas pendientes ---- */
+.dpend{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin:8px 12px 0;padding:6px 10px;border:1px solid #fecdca;border-left:3px solid var(--red);border-radius:8px;background:var(--red1)}
+.dpend .lbl{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--red)}
+.dpend .lbl svg{width:14px;height:14px}
+.dpend .dch{font-size:12px;font-weight:600;padding:3px 8px;border-radius:7px;border:1px solid #fecdca;background:var(--card);color:var(--tx);cursor:pointer}
+.dpend .dch b{color:var(--red);margin-left:3px}
+.dpend .dch small{font-size:10.5px;color:var(--tx2);margin-left:4px;font-weight:500}
+.dpend .dtot{margin-left:auto;font-size:12.5px;color:var(--red)}
+.dpend .dfav{font-size:12.5px;color:var(--ok);font-weight:600}
+@media print{.dpend .dch{border:none;padding:0 4px}}
 /* ---- celular: general ---- */
 @media (max-width:600px){
   .frame{padding-block:12px 28px!important}
@@ -1258,7 +1268,7 @@ function mrVentaSel(){
   const d=String(S.rfecha).slice(0,10),vs=db.mayor.ventas.filter(v=>v.fecha===d&&mrOk(S.mrcli)(v.cliente)&&!v.anulada).sort((a,b)=>a.num-b.num);
   return `${vs.map((v,i)=>{const k=rkV(v),n=Object.values(v.items).reduce((a,x)=>a+x,0);
       return `<button class="vch ${S.rfecha===k?'on':''}" title="Venta N° ${v.num}" onclick="S.rfecha='${k}';render()">${i+1}° compra<small>${v.hora.slice(0,5)} · ${n} cil.</small></button>`;}).join('')}
-    <button class="vch ${S.rfecha===d?'on':''}" onclick="S.rfecha='${d}';render()">${vs.length?'Solo abonos':'Sin compras este día'}</button>`;
+    ${vs.length?'':'<span class="hint" style="font-size:12px">Sin compras este día</span>'}`;
 }
 const mrCli=()=>S.mrcli&&S.mrcli!==MLEG?findCli(S.mrcli):null;
 const mrPrecio=p=>{const c=mrCli();return c?precioCli(c,p.id):precioBase(p);};
@@ -1312,6 +1322,17 @@ function saldoAntes(f){
   const fechas=new Set([...RV().map(v=>v.rk||v.fecha),...RM().map(m=>m.fecha),...Object.keys(RR())]);
   let s=0;fechas.forEach(d=>{if(d<f)s+=calcDia(d).saldo;});return s;
 }
+/* Deudas de días (o compras) anteriores que siguen sin pagarse.
+   Lo que sobra un día (saldo a favor) paga primero la deuda más antigua. */
+function deudasPend(f,f2){
+  const fechas=[...new Set([...RV().map(v=>v.rk||v.fecha),...RM().map(m=>m.fecha),...Object.keys(RR())])].filter(d=>d<=f2).sort();
+  const q=[];let favor=0;
+  fechas.forEach(d=>{let sd=calcDia(d).saldo;
+    if(sd>0){if(favor>0){const u=Math.min(favor,sd);favor-=u;sd-=u;}if(sd>0)q.push({k:d,orig:calcDia(d).saldo,pend:sd});}
+    else if(sd<0){let x=-sd;for(const e of q){if(!x)break;const u=Math.min(x,e.pend);e.pend-=u;x-=u;}favor+=x;}});
+  return {list:q.filter(e=>e.pend>0&&e.k<f),favor};
+}
+const dLbl=k=>{const d=dmy(String(k).slice(0,10)).slice(0,5);if(!String(k).includes('#'))return d;const n=+String(k).split('#')[1];return d+' · N° '+n;};
 function saldoHist(f){
   const fechas=new Set([...RV().map(v=>v.rk||v.fecha),...RM().map(m=>m.fecha),...Object.keys(RR())]);
   let s=0;fechas.forEach(d=>{if(d<=f)s+=calcDia(d).saldo;});return s;
@@ -1373,7 +1394,7 @@ function delR(k,id,f){if(pastLock(f||S.rfecha))return toast('Día cerrado: solo 
 function saveObs(){if(rLock())return toast('Día cerrado: solo un administrador puede modificar ventas o rendiciones de días anteriores.','err');getRend(S.rfecha).obs=$('#robs').value;save();toast('Observaciones guardadas ✔');}
 function vRend(){
   if(!MKEY()&&String(S.rfecha).includes('#'))S.rfecha=String(S.rfecha).slice(0,10);
-  if(MKEY()&&String(S.rfecha).includes('#')&&!db.mayor.ventas.some(v=>!v.anulada&&rkV(v)===S.rfecha)){S.rfecha=String(S.rfecha).slice(0,10);mrAuto();}
+  if(MKEY()&&!S.rfecha2&&!db.mayor.ventas.some(v=>!v.anulada&&rkV(v)===S.rfecha)){S.rfecha=String(S.rfecha).slice(0,10);mrAuto();}
   if(isM()&&!S.mrcli)return frame('Rendición Mayorista','may',null,`
     <div class="rtop" style="flex-wrap:wrap"><span class="rtt">Rendición Mayorista · ${esc(S.user.suc)}</span>${canView('mcta')?`<button class="btn sm no-print" onclick="go('mcta')">Cuenta Clientes</button>`:''}</div>
     <div class="mrbar no-print"><div class="row"><span class="lbl">CLIENTE</span>${mrClientesSel()}</div></div>
@@ -1394,6 +1415,10 @@ function vRend(){
       ${m?`<button class="btn sm" onclick="S.rfecha2='';render()">Solo un día</button>`:''}</div>
     ${MY?`<div class="mrbar no-print"><div class="row"><span class="lbl">CLIENTE</span>${mrClientesSel()}</div>
       ${MKEY()&&!m?`<div class="row"><span class="lbl">COMPRAS DEL DÍA</span>${mrVentaSel()}</div>`:''}</div>`:''}
+    ${(()=>{const dp=deudasPend(String(f),String(f2));const tot=dp.list.reduce((a,x)=>a+x.pend,0);
+      if(!dp.list.length&&!dp.favor)return '';
+      return `<div class="dpend">${dp.list.length?`<span class="lbl">${ic('alert')}DEUDAS PENDIENTES</span>${dp.list.map(x=>`<button class="dch" title="Ir a ${dLbl(x.k)}" onclick="S.rfecha='${x.k}';S.rfecha2='';render()">${dLbl(x.k)} <b>${money(x.pend)}</b>${x.pend<x.orig?`<small>de ${money(x.orig)}</small>`:''}</button>`).join('')}<span class="dtot">Total adeudado: <b>${money(tot)}</b></span>`:''}
+        ${dp.favor?`<span class="dfav">Saldo a favor: <b>${money(dp.favor)}</b></span>`:''}</div>`;})()}
     <div class="rgrid rc"><div>
       <div class="tw"><table>
         <tr><th class="l"></th>${ps.map(p=>`<th class="${p.tipo==='c'?'cat':''}">${p.id}</th>`).join('')}</tr>

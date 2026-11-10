@@ -290,6 +290,61 @@ textarea{width:100%;min-height:100px;resize:vertical}
 .mm-v .h .sp{flex:1}
 .mm-v .ib{width:38px;height:38px}
 .mm-v .q{margin-top:6px}
+/* ---- celular: general ---- */
+@media (max-width:600px){
+  .frame{padding-block:12px 28px!important}
+  .phead{margin-bottom:10px}
+  .phead h1{font-size:24px!important}
+  .pside{flex-direction:row!important;flex-wrap:wrap!important;overflow:visible!important;gap:6px!important;padding:8px!important;position:static!important}
+  .pside button{flex:0 0 auto!important;width:auto!important;white-space:nowrap;padding:8px 12px!important;border:1px solid var(--line);border-radius:999px!important;font-size:13px}
+  .pside button.on{border-color:var(--b6)}
+  .pside button.on::before{display:none}
+  .panel,.pmain>.panel{padding:12px!important}
+  .btn{min-height:40px}
+  .btn.sm{min-height:34px}
+  .ib{min-width:36px;min-height:36px}
+  input,select,textarea{font-size:16px!important}
+  .frow{justify-content:flex-start!important;flex-wrap:wrap;gap:8px}
+  .frow input,.frow select{flex:1 1 140px;min-width:0!important}
+  .frm{flex-direction:column;align-items:stretch!important}
+  .frm label{width:100%;min-width:0!important}
+  .frm label input,.frm label select{width:100%}
+  .stat{padding:12px!important}
+  .stat .v{font-size:19px!important;word-break:break-word}
+  .stat .k{font-size:10.5px}
+  .vbtns{display:grid!important;grid-template-columns:1fr 1fr;gap:8px}
+  .vbtns .sp{display:none}
+  .vbtns .btn{width:100%}
+  .vbtns .btn.primary{grid-column:1/-1;height:52px;font-size:17px}
+  table.mt th,table.mt td{white-space:normal;padding:8px 6px}
+  table.mt th.mh{text-align:left;font-size:14px;color:var(--tx);background:var(--b0)}
+  table.mt input.ei{width:100%;min-width:56px;height:40px;font-size:17px;text-align:center}
+  .tw{-webkit-overflow-scrolling:touch}
+  .modal .mbox{width:calc(100vw - 24px)!important;max-height:calc(100vh - 24px);overflow:auto}
+  .mbtns{flex-wrap:wrap}
+}
+/* ---- venta local en celular ---- */
+.vm-g{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.vm-c{border:1px solid var(--line);border-radius:12px;padding:10px 8px;display:flex;flex-direction:column;align-items:center;gap:6px;background:var(--card)}
+.vm-c.on{border-color:var(--b6);background:var(--b0);box-shadow:0 0 0 1px var(--b6) inset}
+.vm-c .t{font-size:16px;font-weight:700}
+.vm-c .pr{font-family:var(--f-num);font-size:13px;color:var(--b7);font-weight:600}
+.vm-c .pm{display:flex;align-items:center;gap:6px}
+.vm-c .pm{gap:4px}.vm-c .pm button{width:38px;height:40px;flex:0 0 auto;font-size:22px;border-radius:10px;border:1px solid var(--line);background:var(--card);font-weight:700;color:var(--tx)}
+.vm-c .pm input{width:46px;min-width:0;height:40px;font-size:18px;text-align:center;font-weight:700;padding:0}
+.vm-c .stk{font-size:11.5px}
+.vm-c .env{width:100%;border-top:1px dashed var(--line);padding-top:6px;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px;color:var(--tx2);text-align:center}
+.vm-c .env .pm button{width:32px;height:32px;font-size:18px}
+.vm-c .env .pm input{width:42px;height:32px;font-size:15px}
+.vm-tot{margin-top:12px;border-radius:12px;background:var(--b1);padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.vm-tot .r1{display:flex;justify-content:space-between;align-items:center;color:var(--b8);font-weight:700}
+.vm-tot .r1 b{font-family:var(--f-num);font-size:24px}
+.vm-tot .r2{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:14px;color:var(--tx2)}
+.vm-tot .r2 input{width:140px;height:40px}
+.vm-v{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:var(--card)}
+.vm-v.anul{opacity:.55}
+.vm-v .h{display:flex;align-items:center;gap:8px;font-size:14px;white-space:nowrap}.vm-v .h .hint{overflow:hidden;text-overflow:ellipsis}
+.vm-v .h .sp{flex:1}
 /* ---- celular ---- */
 @media (max-width:600px){
   .stats{grid-template-columns:repeat(2,minmax(0,1fr))!important}
@@ -1005,7 +1060,42 @@ function calcCart(){
 }
 function setQ(kind,id,val,el){const n=num(val);if(n)S.cart[kind][id]=n;else delete S.cart[kind][id];el.classList.toggle('has',n>0);upd();}
 function upd(){const t=calcCart();$('#vtotal').textContent=money(t.total);$('#vsub').textContent=money(t.sub);$('#vvuelto').textContent=money(t.vuelto);$('#vtotal2').textContent=money(t.total);}
+function vmStep(b,kind,id,d){const i=b.parentNode.querySelector('input');i.value=Math.max(0,num(i.value)+d)||'';setQ(kind,id,i.value,i);vmMark();}
+function vmMark(){$$('.vm-c').forEach(c=>c.classList.toggle('on',[...c.querySelectorAll('input')].some(i=>num(i.value)>0)));}
+function vVentaMob(){
+  const c=S.cart,t=calcCart(),ps=db.products;
+  const st=(kind,p,sm)=>`<div class="pm"><button type="button" onclick="vmStep(this,'${kind}','${p.id}',-1)">−</button><input class="q ${c[kind][p.id]?'has':''}" type="number" min="0" inputmode="numeric" placeholder="0" value="${c[kind][p.id]||''}" oninput="setQ('${kind}','${p.id}',this.value,this);vmMark()"><button type="button" onclick="vmStep(this,'${kind}','${p.id}',1)">+</button></div>`;
+  return caja(`<div class="vm-g">${ps.map(p=>`<div class="vm-c ${(c.items[p.id]||c.env[p.id])?'on':''}"><div class="t">${colLbl(p)}</div><div class="pr">${money(p.venta)}</div>
+      ${st('items',p)}<div class="stk ${p.stock<=0?'out':''}">Stock: ${p.stock}</div>
+      ${p.envase?`<div class="env"><span>Envase <b>${money(p.envase)}</b></span>${st('env',p)}</div>`:''}</div>`).join('')}</div>
+    <div class="vm-tot"><div class="r1"><span>TOTAL</span><b id="vtotal">${money(t.total)}</b></div>
+      <div class="r2"><span>Descuento $</span><input type="number" inputmode="numeric" placeholder="0" value="${c.desc||''}" oninput="S.cart.desc=num(this.value);upd()"></div></div>
+  <div class="pago ${S.showPago?'':'hide'}" id="pago">
+    <span>Subtotal: <b id="vsub">${money(t.sub)}</b></span><span>Total: <b id="vtotal2">${money(t.total)}</b></span>
+    <label>Medio de pago<select onchange="S.cart.pago=this.value">${['Efectivo','Débito','Crédito','Transferencia','Vale'].map(x=>`<option ${c.pago===x?'selected':''}>${x}</option>`).join('')}</select></label>
+    <label>Recibe $<input type="number" inputmode="numeric" placeholder="0" value="${c.recibe||''}" oninput="S.cart.recibe=num(this.value);upd()"></label>
+    <span>Vuelto: <b id="vvuelto">${money(t.vuelto)}</b></span></div>
+  <div class="vbtns">
+    <button class="btn primary" onclick="grabar()">Grabar venta</button>
+    <button class="btn" onclick="S.showPago=!S.showPago;$('#pago').classList.toggle('hide')">Ingresar pago</button>
+    <button class="btn" onclick="S.cart=newCart();S.last=null;render()">Nueva venta</button>
+    <button class="btn" onclick="S.last?printVenta(S.last):toast('Aún no hay venta grabada','err')">Imprimir</button>
+    <button class="btn danger" onclick="S.last?anular(S.last):toast('No hay venta para anular','err')">Anular</button>
+  </div>
+  ${S.last?`<p class="hint" style="text-align:center;margin-top:8px">Última venta grabada: N° ${db.ventas.find(v=>v.id===S.last)?.num??''}</p>`:''}
+  ${ventasHoyMob()}`);
+}
+function ventasHoyMob(){
+  const vs=db.ventas.filter(v=>v.fecha===today()).slice().reverse().slice(0,30);
+  const q=v=>Object.keys(v.items).map(id=>`<span class="chip">${v.items[id]} × ${colLbl(P(id))}</span>`).join('')+Object.keys(v.env||{}).filter(id=>v.env[id]).map(id=>`<span class="chip">${v.env[id]} env ${colLbl(P(id))}</span>`).join('');
+  return `<p class="stitle" style="margin-top:22px">Ventas de hoy</p>
+  ${vs.length?vs.map(v=>`<div class="vm-v ${v.anulada?'anul':''}"><div class="h"><b>N° ${v.num}</b><span class="hint">${v.hora.slice(0,5)} · ${esc(v.usuario)}</span><span class="sp"></span><b>${money(v.total)}</b>
+    ${v.anulada?'<span class="badge red">Anulada</span>':pastLock(v.fecha)?LOCKI:`<button class="ib" title="Editar venta" onclick="editVentaM('l',${v.id})">${ic('edit')}</button><button class="ib red" title="Eliminar venta" onclick="delVentaM('l',${v.id})">${ic('trash')}</button>`}</div>
+    <div style="margin-top:6px">${q(v)}${v.editada?' <span class="hint">· editada</span>':''}</div></div>`).join('')
+    :'<p class="empty" style="text-align:center;padding:14px">Aún no hay ventas hoy</p>'}`;
+}
 function vVenta(){
+  _mob=MOB();if(_mob)return vVentaMob();
   const c=S.cart,t=calcCart(),ps=db.products;
   const qin=(kind,p)=>`<input class="q ${c[kind][p.id]?'has':''}" type="number" min="0" inputmode="numeric" placeholder="0" value="${c[kind][p.id]||''}" oninput="setQ('${kind}','${p.id}',this.value,this)">`;
   return caja(`<div class="vbox"><div class="tw"><table class="vt">
@@ -1535,7 +1625,7 @@ function delUser(i){if(!isAdm())return toast('Solo el administrador puede elimin
 /* ================= VENTA MAYORISTA ================= */
 const MAY_SIDE=[['may','receipt','Venta Mayorista'],['mrend','clip','Rendición Mayorista'],['mcta','users','Cuenta Clientes']];
 const MOB=()=>matchMedia('(max-width:600px)').matches;
-let _mob=null;addEventListener('resize',()=>{const m=MOB();if(_mob!==null&&m!==_mob&&S.view==='may'){_mob=m;render();}else _mob=m;});
+let _mob=null;addEventListener('resize',()=>{const m=MOB();if(_mob!==null&&m!==_mob&&S.user){_mob=m;const a=document.activeElement;if(!a||!/INPUT|TEXTAREA|SELECT/.test(a.tagName))render();}else _mob=m;});
 function mqStep(b,d){const i=b.parentNode.querySelector('input');i.value=Math.max(0,num(i.value)+d)||'';mqTot();}
 function mqTot(){const e=$('#mqtot');if(!e)return;const c=findCli(($('#mcli')||{}).value);let t=0,n=0;
   $$('[data-mq]').forEach(el=>{const q=num(el.value);el.closest('.edc')&&el.closest('.edc').classList.toggle('on',q>0);if(!q)return;n+=q;t+=q*(c?precioCli(c,el.dataset.mq):precioBase(P(el.dataset.mq)));});
@@ -2305,6 +2395,30 @@ function render(){
   if((!S.user||!db)&&S.view!=='login')S.view='login';
   if(S.user&&db&&!canView(S.view))S.view='home';
   $('#app').innerHTML=(VIEWS[S.view]||vHome)();
+  try{mobT();}catch(e){}
+}
+/* En celular, las tablas de ingreso por cilindro se muestran giradas: un cilindro por fila */
+function mobT(){
+  if(!MOB()||['inf','clientes','pmay'].includes(S.view))return;
+  const labs=new Set();db&&db.products.forEach(p=>{labs.add(colLbl(p));labs.add(p.id);});GROUPS.forEach(g=>labs.add(g));
+  document.querySelectorAll('.tw.blk > table').forEach(t=>{
+    const rows=[...t.rows];
+    const hi=rows.findIndex(r=>r.cells.length>2&&[...r.cells].slice(1).every(c=>c.tagName==='TH'));
+    if(hi<0)return;const H=rows[hi],n=H.cells.length;
+    const hits=[...H.cells].slice(1).filter(c=>labs.has(c.textContent.trim())).length;if(hits<(n-1)*0.6)return;
+    const body=rows.filter((r,i)=>i!==hi&&r.cells.length===n&&![...r.cells].some(c=>c.colSpan>1||c.rowSpan>1));
+    const caps=rows.filter((r,i)=>i!==hi&&!body.includes(r));
+    if(!body.length||body.length>4)return;
+    const nt=document.createElement('table');nt.className=(t.className+' mt').trim();if(t.id)nt.id=t.id;
+    const tb=document.createElement('tbody');nt.appendChild(tb);
+    caps.forEach(r=>{if([...r.cells].length===1){r.cells[0].colSpan=body.length+1;tb.appendChild(r);}});
+    const hr=document.createElement('tr');const c0=document.createElement('th');c0.innerHTML=H.cells[0].innerHTML;hr.appendChild(c0);
+    body.forEach(r=>{const th=document.createElement('th');th.innerHTML=r.cells[0].innerHTML;th.className=r.className;hr.appendChild(th);});tb.appendChild(hr);
+    const cols=body.map(r=>[...r.cells]);const hc=[...H.cells];
+    for(let j=1;j<n;j++){const tr=document.createElement('tr');const th=document.createElement('th');th.className='mh '+(hc[j].className||'');th.innerHTML=hc[j].innerHTML;tr.appendChild(th);
+      cols.forEach((cs,i)=>{const td=cs[j];if(body[i].classList.contains('tot'))td.style.fontWeight='700';tr.appendChild(td);});tb.appendChild(tr);}
+    t.replaceWith(nt);
+  });
 }
 setInterval(()=>{const c=$('#clock');if(c)c.textContent=hora();},1000);
 applyTheme(THEME);

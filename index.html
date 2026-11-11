@@ -290,6 +290,9 @@ textarea{width:100%;min-height:100px;resize:vertical}
 .mm-v .h .sp{flex:1}
 .mm-v .ib{width:38px;height:38px}
 .mm-v .q{margin-top:6px}
+/* ---- respaldo base de datos ---- */
+.dbbox{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:22px;padding:14px 16px;border:1px dashed var(--b3);border-radius:10px;background:var(--b0)}
+.dbbox .hint{margin-top:4px;max-width:640px}
 /* ---- deudas pendientes ---- */
 .dpend{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin:8px 12px 0;padding:6px 10px;border:1px solid #fecdca;border-left:3px solid var(--red);border-radius:8px;background:var(--red1)}
 .dpend .lbl{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--red)}
@@ -1436,14 +1439,13 @@ function vRend(){
           <tr><th>TOTAL ($)</th><th>TOTAL (Kilos)</th><th>TOTAL (Tarros)</th></tr>
           <tr><td class="bigv">${money(d.venta)}</td><td class="bigv">${kilos.toLocaleString('es-CL')} Kilos</td><td class="bigv">${tarros} Un.</td></tr>
           <tr><th>RENDICIÓN:</th><th>SALDO ${m?'PERÍODO':'DEL DÍA'}:</th><th>SALDO PENDIENTE TOTAL</th></tr>
-          <tr><td class="bigv">${money(d.rendido)}</td><td class="bigv saldo ${d.saldo>0?'falta':d.saldo<0?'sobra':'ok'}">${money(d.saldo)}</td><td class="bigv saldo ${hist>0?'falta':hist<0?'sobra':'ok'}">${money(hist)}</td></tr>
+          <tr><td class="bigv">${money(d.rendido+(d.com||0))}</td><td class="bigv saldo ${d.saldo>0?'falta':d.saldo<0?'sobra':'ok'}">${money(d.saldo)}</td><td class="bigv saldo ${hist>0?'falta':hist<0?'sobra':'ok'}">${money(hist)}</td></tr>
         </table>
         <table class="tbox" style="margin-top:10px">
           <tr><td class="l">Saldo anterior pendiente</td><td class="r">${money(ant)}</td></tr>
           <tr><td class="l">+ ${m?'Venta del período':(MKEY()?'Venta':'Venta del día')}</td><td class="r">${money(d.venta)}</td></tr>
           <tr><td class="l">+ Cargos</td><td class="r">${money(d.cargos)}</td></tr>
-          <tr><td class="l">− Rendido</td><td class="r">${money(d.rendido)}</td></tr>
-          ${isM()?`<tr><td class="l">− Comisión vales <span class="hint">(a favor del cliente)</span></td><td class="r">${money(d.com||0)}</td></tr>`:''}
+          <tr><td class="l">− Rendido</td><td class="r">${money(d.rendido+(d.com||0))}</td></tr>
           <tr class="tot"><td class="l">= SALDO PENDIENTE</td><td class="r">${money(ant+d.saldo)}</td></tr>
         </table></div>
       </div>
@@ -1875,7 +1877,7 @@ function vMRend(){
       <span class="hint" id="asal" style="width:100%"></span></div>
     <div class="sect">SALDO POR CLIENTE</div>
     <div class="tw blk"><table><tr><th class="l">CLIENTE</th><th>COMPRADO</th><th>PAGADO</th><th>SALDO</th><th>ÚLTIMA COMPRA</th><th class="no-print"></th></tr>
-    ${cl.length?cl.map(c=>{const sd=c.comp-c.abo;return `<tr><td class="l"><b>${esc(c.cliente)}</b></td><td class="n">${money(c.comp)}</td><td class="n">${money(c.abo)}${c.com?`<div class="hint">incl. comisión vales ${money(c.com)}</div>`:''}</td>
+    ${cl.length?cl.map(c=>{const sd=c.comp-c.abo;return `<tr><td class="l"><b>${esc(c.cliente)}</b></td><td class="n">${money(c.comp)}</td><td class="n">${money(c.abo)}</td>
       <td class="n" style="color:${sd>0?'var(--red)':sd<0?'var(--b7)':'var(--tx)'}"><b>${money(sd)}</b> ${sd===0?'<span class="badge">Al día</span>':sd<0?'<span class="badge">A favor</span>':''}</td><td>${c.ult?dmy(c.ult):'-'}</td>
       <td class="no-print"><button class="btn sm" onclick="S.mfc=${esc(JSON.stringify(c.cliente))};render()">Ver movimientos</button></td></tr>`;}).join('')
       :'<tr><td colspan="6" class="empty">Aún no hay clientes mayoristas</td></tr>'}
@@ -2328,6 +2330,37 @@ async function exportExcel(){
     return;}
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);toast('Excel descargado ✔');
 }
+/* ---- Descarga de la base de datos completa (solo administradores, con contraseña especial) ---- */
+const DBPASS_H='c382fe134189e90d3f96cf2b6711ee04faec285f96853ee118cd94f025ca0c21';
+async function sha256(t){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');}
+async function dlBlob(name,blob,okMsg){
+  let dl=null;try{if(window.claude&&window.claude.use)dl=await window.claude.use('downloads');}catch(e){}
+  if(dl){try{await dl.save({filename:name,data:blob});toast(okMsg);}
+    catch(e){const c=e&&e.code;if(c==='declined')toast('Descarga cancelada.');else if(c==='rate_limited')toast('Ya hay una descarga pendiente de confirmar.','err');else toast('No se pudo descargar el archivo aquí.','err');}
+    return;}
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);toast(okMsg);
+}
+function pedirClaveDB(){
+  if(!(can('*admin')||S.infOk))return toast('Solo un administrador puede descargar la base de datos.','err');
+  const m=document.createElement('div');m.className='modal dbm';
+  m.innerHTML=`<div class="mbox"><p>Descargar base de datos</p>
+    <p class="hint" style="font-weight:500;margin:-4px 0 10px">Escribe la contraseña especial de respaldo.</p>
+    <input id="dbpw" type="password" autocomplete="off" placeholder="Contraseña especial" style="width:100%;height:42px">
+    <div class="mbtns" style="margin-top:14px"><span style="flex:1"></span><button class="btn" onclick="this.closest('.modal').remove()">Cancelar</button>
+      <button class="btn primary" onclick="descargarDB()">${ic('doc')}Descargar</button></div></div>`;
+  m.addEventListener('click',e=>{if(e.target===m)m.remove();});
+  document.body.appendChild(m);const i=m.querySelector('#dbpw');i.focus();i.addEventListener('keydown',e=>{if(e.key==='Enter')descargarDB();});
+}
+async function descargarDB(){
+  const i=$('#dbpw');if(!i)return;
+  let h='';try{h=await sha256(i.value);}catch(e){}
+  if(h!==DBPASS_H){i.value='';i.focus();return toast('Contraseña especial incorrecta.','err');}
+  document.querySelector('.modal.dbm')?.remove();
+  const suc={};SUCS.forEach(x=>{suc[x]=x===S.user.suc?db:load(x);});
+  const data={app:'MR Sistema Local',tipo:'respaldo-completo',version:1,generado:today()+' '+hora(),por:S.user.nombre,usuarios:USERS,sucursales:suc};
+  const blob=new Blob([JSON.stringify(data,null,1)],{type:'application/json'});
+  await dlBlob(`MR base de datos ${dmy(today())}.json`,blob,'Base de datos descargada ✔');
+}
 let INFDATA=null;
 function vInf(){
   if(!isAdmin())return frame('Informes','home',null,`<div style="padding:24px" class="empty">Solo un administrador puede ver los informes. <button class="btn sm primary" onclick="abrirInf()">Ingresar como administrador</button></div>`);
@@ -2409,6 +2442,8 @@ function vInf(){
       ${list.map(r=>`<tr><td class="l"><b>${r.suc}</b></td>${PRODS.map(p=>`<td class="n">${r.stock[p.id]||0}</td>`).join('')}<td class="n"><b>${r.llenos}</b></td><td class="n"><b>${r.vac}</b></td></tr>`).join('')}
       ${tot?`<tr class="tot"><td class="l">TOTAL</td>${PRODS.map(p=>`<td>${T.stock[p.id]||0}</td>`).join('')}<td>${T.llenos}</td><td>${T.vac}</td></tr>`:''}
     </table></div>
+    ${can('*admin')||S.infOk?`<div class="dbbox no-print"><div><b>Respaldo de la base de datos</b><div class="hint">Descarga todos los datos de las ${SUCS.length} sucursales (ventas, rendiciones, clientes, bodega, precios y usuarios) en un archivo. Solo administradores. Pide una contraseña especial.</div></div>
+      <button class="btn primary" onclick="pedirClaveDB()">${ic('doc')}Descargar base de datos</button></div>`:''}
     </div>`,true,`<button class="btn" onclick="doPrint()">${ic('print')}Imprimir</button>`);
 }
 

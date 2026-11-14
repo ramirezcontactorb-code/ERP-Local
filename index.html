@@ -1120,7 +1120,7 @@ function ventasHoyMob(){
   const q=v=>Object.keys(v.items).map(id=>`<span class="chip">${v.items[id]} × ${colLbl(P(id))}</span>`).join('')+Object.keys(v.env||{}).filter(id=>v.env[id]).map(id=>`<span class="chip">${v.env[id]} env ${colLbl(P(id))}</span>`).join('');
   return `<p class="stitle" style="margin-top:22px">Ventas de hoy</p>
   ${vs.length?vs.map(v=>`<div class="vm-v ${v.anulada?'anul':''}"><div class="h"><b>N° ${v.num}</b><span class="hint">${v.hora.slice(0,5)} · ${esc(v.usuario)}</span><span class="sp"></span><b>${money(v.total)}</b>
-    ${v.anulada?'<span class="badge red">Anulada</span>':pastLock(v.fecha)?LOCKI:`<button class="ib" title="Editar venta" onclick="editVentaM('l',${v.id})">${ic('edit')}</button><button class="ib red" title="Eliminar venta" onclick="delVentaM('l',${v.id})">${ic('trash')}</button>`}</div>
+    ${v.anulada?'<span class="badge red">Anulada</span>':pastLock(v.fecha)?LOCKI:`<button class="btn sm danger" title="Anular venta" onclick="delVentaM('l',${v.id})">${ic('x')}Anular</button>`}</div>
     <div style="margin-top:6px">${q(v)}${v.editada?' <span class="hint">· editada</span>':''}</div></div>`).join('')
     :'<p class="empty" style="text-align:center;padding:14px">Aún no hay ventas hoy</p>'}`;
 }
@@ -1157,7 +1157,7 @@ function vVenta(){
 function ventasHoyTbl(){
   const ps=db.products,vs=db.ventas.filter(v=>v.fecha===today()).slice().reverse().slice(0,30);
   const qi=(attr,id,val)=>`<input class="ei" style="width:56px;text-align:center" type="number" min="0" inputmode="numeric" placeholder="0" ${attr}="${id}" value="${val||''}">`;
-  return `<p class="stitle" style="margin-top:24px">Ventas de hoy <span class="hint" style="text-transform:none;letter-spacing:0">· usa el lápiz para corregir cantidades</span></p>
+  return `<p class="stitle" style="margin-top:24px">Ventas de hoy <span class="hint" style="text-transform:none;letter-spacing:0">· si hay un error, anula la venta y vuelve a ingresarla</span></p>
   <div class="tw"><table><tr><th>N°</th><th>HORA</th><th>USUARIO</th>${ps.map(p=>`<th>${colLbl(p)}</th>`).join('')}<th>TOTAL</th><th class="no-print"></th></tr>
   ${vs.length?vs.map(v=>{const ed=S.vedit===v.id&&!v.anulada;
     return `<tr class="${v.anulada?'anul':''}"><td>${v.num}</td><td>${v.hora}</td><td>${esc(v.usuario)}</td>
@@ -1166,17 +1166,17 @@ function ventasHoyTbl(){
     <td class="r"><b>${money(v.total)}</b>${v.editada?`<div class="hint">editada</div>`:''}</td>
     <td class="no-print" style="white-space:nowrap">${v.anulada?'<span class="badge red">Anulada</span>':ed
       ?`<button class="btn primary sm" onclick="saveEditVenta(${v.id})">${ic('check')}Guardar</button> <button class="btn sm" onclick="S.vedit=null;render()">Cancelar</button>`
-      :pastLock(v.fecha)?LOCKI:`<button class="ib" title="Editar venta" onclick="editVentaM('l',${v.id})">${ic('edit')}</button> <button class="ib red" title="Eliminar venta" onclick="delVentaM('l',${v.id})">${ic('trash')}</button>`}</td></tr>`;}).join('')
+      :pastLock(v.fecha)?LOCKI:`<button class="btn sm danger" title="Anular venta" onclick="delVentaM('l',${v.id})">${ic('x')}Anular</button>`}</td></tr>`;}).join('')
     :`<tr><td colspan="${ps.length+5}" class="empty">Aún no hay ventas hoy</td></tr>`}
   </table></div>`;
 }
 /* ---- Editor de venta en ventana (local 'l' / mayorista 'm') ---- */
 function closeEdM(){const m=document.querySelector('.modal.edm');if(m)m.remove();}
 function delVentaM(k,id){
-  if(!can('anular'))return toast('No tienes permiso para eliminar ventas.','err');
+  if(!can('anular'))return toast('No tienes permiso para anular ventas.','err');
   const v=(k==='l'?db.ventas:db.mayor.ventas).find(x=>x.id===id);if(!v||v.anulada)return;
   if(pastLock(v.fecha))return toast('Día cerrado: solo un administrador puede modificar ventas o rendiciones de días anteriores.','err');
-  ask(`¿Eliminar la venta N° ${v.num}${v.cliente?' de '+v.cliente:''}? Los cilindros vuelven a bodega.`,()=>{closeEdM();
+  ask(`¿Anular la venta N° ${v.num}${v.cliente?' de '+v.cliente:''}? Quedará marcada como ANULADA y los cilindros vuelven a bodega.`,()=>{closeEdM();
     if(k==='l')anular(id,1);else anularMay(id,1);});
 }
 function editVentaM(k,id){
@@ -1680,7 +1680,7 @@ function mayMob(ps,CL,fv,ult){
     <div class="pm"><button type="button" onclick="mqStep(this,-1)">−</button><input class="ei" type="number" min="0" inputmode="numeric" placeholder="0" data-mq="${p.id}" oninput="mqTot()"><button type="button" onclick="mqStep(this,1)">+</button></div>
     <div class="sub">Bodega: <b>${p.stock}</b></div></div>`;
   const vc=v=>`<div class="mm-v ${v.anulada?'anul':''}"><div class="h"><b>N° ${v.num}</b><span class="hint">${v.hora.slice(0,5)}</span><b>${esc(v.cliente)}</b><span class="sp"></span>
-    ${v.anulada?'<span class="badge red">Anulada</span>':pastLock(v.fecha)?LOCKI:`<button class="ib" title="Editar venta" onclick="editVentaM('m',${v.id})">${ic('edit')}</button><button class="ib red" title="Eliminar venta" onclick="delVentaM('m',${v.id})">${ic('trash')}</button>`}</div>
+    ${v.anulada?'<span class="badge red">Anulada</span>':pastLock(v.fecha)?LOCKI:`<button class="btn sm danger" title="Anular venta" onclick="delVentaM('m',${v.id})">${ic('x')}Anular</button>`}</div>
     <div class="q">${qtyTxt(v)}${v.editada?' <span class="hint">· editada</span>':''}</div>${v.obs?`<div class="hint">${esc(v.obs)}</div>`:''}</div>`;
   return `<div class="mm"><div class="sect">NUEVA VENTA MAYORISTA</div>
     <label class="mm-l" for="mcli">Cliente</label><select id="mcli" onchange="mqTot()"><option value="">Selecciona un cliente</option>${CL.slice().sort((x,y)=>x.nombre.localeCompare(y.nombre)).map(c=>`<option>${esc(c.nombre)}</option>`).join('')}</select>
@@ -1739,7 +1739,7 @@ function vMay(){
       <td class="l" style="white-space:normal">${ed?ps.map(p=>`<label style="display:inline-flex;align-items:center;gap:4px;margin:2px 8px 2px 0"><b>${colLbl(p)}</b><input class="ei" style="width:56px;text-align:center" type="number" min="0" inputmode="numeric" placeholder="0" data-mei="${p.id}" value="${v.items[p.id]||''}"></label>`).join(''):qtyTxt(v)}${v.editada&&!ed?' <span class="hint">· editada</span>':''}</td><td>${esc(v.usuario)}</td>
       <td class="no-print" style="white-space:nowrap">${v.anulada?'<span class="badge red">Anulada</span>':ed
         ?`<button class="btn primary sm" onclick="saveEditMay(${v.id})">${ic('check')}Guardar</button> <button class="btn sm" onclick="S.medit=null;render()">Cancelar</button>`
-        :pastLock(v.fecha)?LOCKI:`<button class="ib" title="Editar venta" onclick="editVentaM('m',${v.id})">${ic('edit')}</button> <button class="ib red" title="Eliminar venta" onclick="delVentaM('m',${v.id})">${ic('trash')}</button>`}</td></tr>`;}).join('')
+        :pastLock(v.fecha)?LOCKI:`<button class="btn sm danger" title="Anular venta" onclick="delVentaM('m',${v.id})">${ic('x')}Anular</button>`}</td></tr>`;}).join('')
       :'<tr><td colspan="7" class="empty">'+(fv===today()?'Hoy aún no hay ventas mayoristas.':'No hay ventas mayoristas ese día.')+' Elige otra fecha y presiona <b>Ver</b>.</td></tr>'}
     </table></div>`);
 }

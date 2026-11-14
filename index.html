@@ -691,6 +691,18 @@ const sucKey=n=>'mr_suc_'+n.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(
 function readLS(k){try{return JSON.parse(localStorage.getItem(k));}catch(e){return null;}}
 function fresh(){return {products:JSON.parse(JSON.stringify(PRODS)),ventas:[],movs:[],rend:{},seq:1};}
 /* usuarios: compartidos por todas las sucursales */
+/* Precio base mayorista y comisión de vales: iguales para todas las sucursales (documento app/global) */
+let GLOBAL=(()=>{const g=readLS('mr_global');return g&&typeof g==='object'?g:{mayor:{},comision:null,hist:[]};})();
+function applyGlobal(d){if(!d||!GLOBAL)return d;
+  const m=GLOBAL.mayor||{};if(d.products&&Object.keys(m).length)d.products.forEach(p=>{if(m[p.id]!=null)p.mayor=m[p.id];});
+  if(GLOBAL.comision)d.comision=JSON.parse(JSON.stringify(GLOBAL.comision));return d;}
+function saveGlobal(){
+  GLOBAL.t=Date.now();GLOBAL.hist=(GLOBAL.hist||[]).slice(-500);
+  try{localStorage.setItem('mr_global',JSON.stringify(GLOBAL));}catch(e){}
+  SUCS.forEach(x=>{if(DBS[x])applyGlobal(DBS[x]);});
+  if(!STORE){SUCS.forEach(x=>{if(S.user&&x===S.user.suc)return;const d=loadLocal(x);if(d){applyGlobal(d);try{localStorage.setItem(sucKey(x),JSON.stringify(d));}catch(e){}}});return;}
+  writeParts({'app/global':JSON.parse(JSON.stringify(GLOBAL))});
+}
 let USERS=readLS('mr_users');
 if(!Array.isArray(USERS)||!USERS.length){const old=readLS(KEY);USERS=(old&&Array.isArray(old.users)&&old.users.length)?old.users:[{u:'matias',p:'1234',nombre:'MATIAS'}];}
 if(!USERS.some(u=>u.rol==='admin')){(USERS.find(u=>u.u==='matias')||USERS[0]).rol='admin';}
@@ -703,7 +715,7 @@ function norm(d){
   if(!d||!d.products)d=Object.assign(fresh(),d||{});
   d.products=PRODS.map(x=>Object.assign(JSON.parse(JSON.stringify(x)),(d.products||[]).find(p=>p.id===x.id)||{}));
   d.vacios=d.vacios||{};d.prestados=d.prestados||{};d.min=d.min||{};d.choferes=d.choferes||[];d.bmovs=d.bmovs||[];
-  d.phist=d.phist||[];d.comision=d.comision||{};d.ventas=d.ventas||[];d.movs=d.movs||[];d.rend=d.rend||{};d.seq=d.seq||1;d.mayor=d.mayor||{};d.mayor.ventas=d.mayor.ventas||[];d.mayor.abonos=d.mayor.abonos||[];d.mayor.seq=d.mayor.seq||1;d.mayor.clientes=d.mayor.clientes||[];d.mayor.rend=d.mayor.rend||{};d.mayor.rendc=d.mayor.rendc||{};if(!d.mayor.listas)d.mayor.listas=[15,30,40].map((x,i)=>({id:i+1,nombre:'Mayorista '+x,dto:x}));return d;}
+  d.phist=d.phist||[];d.comision=d.comision||{};d.ventas=d.ventas||[];d.movs=d.movs||[];d.rend=d.rend||{};d.seq=d.seq||1;d.mayor=d.mayor||{};d.mayor.ventas=d.mayor.ventas||[];d.mayor.abonos=d.mayor.abonos||[];d.mayor.seq=d.mayor.seq||1;d.mayor.clientes=d.mayor.clientes||[];d.mayor.rend=d.mayor.rend||{};d.mayor.rendc=d.mayor.rendc||{};if(!d.mayor.listas)d.mayor.listas=[15,30,40].map((x,i)=>({id:i+1,nombre:'Mayorista '+x,dto:x}));return applyGlobal(d);}
 function loadLocal(suc){let d=readLS(sucKey(suc));
   if((!d||!d.products)&&suc==='Cervantes'){const old=readLS(KEY);if(old&&old.products){d=old;delete d.users;}}
   return (d&&d.products)?norm(d):null;}
@@ -788,6 +800,11 @@ function subscribeAll(){
   STORE.doc('app/users').onSnapshot(sn=>{
     if(sn.exists){const l=(sn.data()||{}).list;if(Array.isArray(l)&&l.length){LAST['app/users']=JSON.stringify({list:l});USERS=fixUsers(clone(l));}}
     if(!sn.metadata.fromCache)markGot('app/users');onRemote();},fail);
+  STORE.doc('app/global').onSnapshot(sn=>{
+    if(sn.exists){const g=sn.data()||{};LAST['app/global']=JSON.stringify(g);GLOBAL={mayor:g.mayor||{},comision:g.comision||null,hist:g.hist||[],t:g.t||0};
+      try{localStorage.setItem('mr_global',JSON.stringify(GLOBAL));}catch(e){}
+      SUCS.forEach(x=>{if(DBS[x])applyGlobal(DBS[x]);});if(db)applyGlobal(db);}
+    onRemote();},fail);
   SUCS.forEach(suc=>{
     const sl=slug(suc),st=ST[suc]={core:null,ventas:{},rend:{},bmovs:{}};
     STORE.doc('suc/'+sl).onSnapshot(sn=>{st.core=sn.exists?clone(sn.data()):null;if(sn.exists)LAST['suc/'+sl]=JSON.stringify(sn.data());
@@ -1530,7 +1547,7 @@ function vPEnv(){
 }
 const CAMPO={mayor:'Mayorista general',venta:'Venta local',movil:'Precio móvil (eliminado)',envase:'Precio envase'};
 function vPHist(){
-  const h=db.phist.slice().reverse();
+  const h=[...db.phist,...((GLOBAL.hist||[]).filter(x=>x.suc!==S.user.suc).map(x=>({...x,usuario:x.usuario+' ('+x.suc+')'})))].sort((a,b)=>(a.fecha+a.hora).localeCompare(b.fecha+b.hora)).reverse();
   return conf(`<div class="sect">HISTORIAL DE PRECIOS</div>
     <div class="tw"><table><tr><th>FECHA</th><th>HORA</th><th>USUARIO</th><th class="l">PRODUCTO</th><th class="l">PRECIO</th><th>ANTES</th><th>AHORA</th></tr>
     ${h.length?h.map(x=>`<tr><td>${dmy(x.fecha)}</td><td>${x.hora}</td><td>${esc(x.usuario)}</td><td class="l"><b>${esc(x.prod)}</b></td><td class="l">${CAMPO[x.campo]||x.campo}</td>
@@ -1554,9 +1571,10 @@ function vCom(){
 function saveCom(){
   let n=0;
   $$('[data-cm]').forEach(el=>{const [i,sz]=el.dataset.cm.split('|'),t=VTIPOS[i],v=num(el.value),c=db.comision[t]=db.comision[t]||{};
-    if((c[sz]||0)!==v){db.phist.push({fecha:today(),hora:hora(),usuario:S.user.nombre,prod:sz==='H'?'H15':sz+' kg',campo:'Comisión '+t,antes:c[sz]||0,despues:v});c[sz]=v;n++;}});
+    if((c[sz]||0)!==v){const h={fecha:today(),hora:hora(),usuario:S.user.nombre,prod:sz==='H'?'H15':sz+' kg',campo:'Comisión '+t,antes:c[sz]||0,despues:v};db.phist.push(h);(GLOBAL.hist=GLOBAL.hist||[]).push({...h,suc:S.user.suc});c[sz]=v;n++;}});
   if(!n)return toast('No hay cambios','err');
-  save();toast('Comisión guardada ✔');render();
+  GLOBAL.comision=JSON.parse(JSON.stringify(db.comision));
+  save();saveGlobal();toast('Comisión guardada en todas las sucursales ✔');render();
 }
 function vUsers(){
   const me=curUser(),meAdmin=me&&me.rol==='admin';
@@ -1809,9 +1827,10 @@ function vPMay(){
 }
 function pbDirecto(){
   let n=0;$$('[data-pd]').forEach(el=>{const p=P(el.dataset.pd),v=num(el.value),a=precioBase(p);if(!v||v===a)return;
-    db.phist.push({fecha:today(),hora:hora(),usuario:S.user.nombre,prod:colLbl(p),campo:'mayor',antes:a,despues:v});p.mayor=v;n++;});
+    const h={fecha:today(),hora:hora(),usuario:S.user.nombre,prod:colLbl(p),campo:'mayor',antes:a,despues:v};db.phist.push(h);(GLOBAL.hist=GLOBAL.hist||[]).push({...h,suc:S.user.suc});p.mayor=v;n++;});
   if(!n)return toast('No hay cambios de precio','err');
-  save();toast(n+' precio(s) base actualizado(s) ✔');render();
+  GLOBAL.mayor={};db.products.forEach(p=>GLOBAL.mayor[p.id]=precioBase(p));
+  save();saveGlobal();toast(n+' precio(s) base actualizado(s) en todas las sucursales ✔');render();
 }
 function addLista(){
   const n=$('#lnom').value.trim(),d=num($('#ldto').value);if(!n)return toast('Escribe el nombre de la lista','err');if(!d)return toast('Escribe el descuento en pesos por kilo','err');
@@ -2227,7 +2246,7 @@ function repSuc(suc,f1,f2){
     Object.keys(db.rend).filter(x=>x>=f1&&x<=f2).forEach(f=>{const R=db.rend[f];RKEYS.forEach(k=>g[k]+=sumK(R,k));});
     [((db.mayor&&db.mayor.rend)||{}),...Object.values((db.mayor&&db.mayor.rendc)||{})].forEach(RRc=>Object.keys(RRc).filter(x=>x>=f1&&x<=f2).forEach(f=>(RRc[f].vales||[]).forEach(e=>com+=comVale(e))));
     const stock={};db.products.forEach(p=>stock[p.id]=llenosTot(p.id));
-    const baseAt=(p,f)=>{const h=(db.phist||[]).filter(x=>x.campo==='mayor'&&x.prod===colLbl(p)&&x.fecha>f).sort((a,b)=>(a.fecha+a.hora).localeCompare(b.fecha+b.hora));return h.length?(h[0].antes||p.venta):precioBase(p);};
+    const baseAt=(p,f)=>{const h=[...(db.phist||[]),...((GLOBAL&&GLOBAL.hist)||[]).filter(x=>x.suc!==suc)].filter(x=>x.campo==='mayor'&&x.prod===colLbl(p)&&x.fecha>f).sort((a,b)=>(a.fecha+a.hora).localeCompare(b.fecha+b.hora));return h.length?(h[0].antes||p.venta):precioBase(p);};
     const gan={},ganV={},ganB={};let gdesc=0;db.products.forEach(p=>{gan[p.id]=0;ganV[p.id]=0;ganB[p.id]=0;});
     r.vs.forEach(v=>{for(const id in v.items){const p=P(id);if(!p)continue;const q=v.items[id],pv=v.precios[id]||0,b=baseAt(p,v.fecha);
       ganV[id]+=q*pv;ganB[id]+=q*b;gan[id]+=q*(pv-b);}gdesc+=v.desc||0;});

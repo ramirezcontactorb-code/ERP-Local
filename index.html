@@ -684,7 +684,9 @@ const PRODS=[
 const GROUPS=['5','11','15','45','H15A'];
 const VSIZES=['5','11','15','45','H'];
 const BANCOS=['Banco de Chile','BancoEstado','Santander','BCI','Scotiabank','Itaú','BICE','Security','Falabella','Ripley','Otro'];
-const RKEYS=['efectivo','vuelto','vales','valesCil','cheques','transf','descuentos','gastos','transbank','cargos','petroleo'];
+const RKEYS=['efectivo','vuelto','vales','valesCil','cheques','transf','descuentos','qr','gastos','transbank','cargos','petroleo'];
+const QRS=['11','15'];
+const qrPrecio=s=>((db&&db.qr)||{})[s]||0;
 
 const SUCS=['Cervantes','El Tranque','Maipo','Padre Damián','Olivos','Jr Coyhaique','Jr Parcelas'];
 const sucKey=n=>'mr_suc_'+n.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,'_');
@@ -695,7 +697,7 @@ function fresh(){return {products:JSON.parse(JSON.stringify(PRODS)),ventas:[],mo
 let GLOBAL=(()=>{const g=readLS('mr_global');return g&&typeof g==='object'?g:{mayor:{},comision:null,hist:[]};})();
 function applyGlobal(d){if(!d||!GLOBAL)return d;
   const m=GLOBAL.mayor||{};if(d.products&&Object.keys(m).length)d.products.forEach(p=>{if(m[p.id]!=null)p.mayor=m[p.id];});
-  if(GLOBAL.comision)d.comision=JSON.parse(JSON.stringify(GLOBAL.comision));return d;}
+  if(GLOBAL.comision)d.comision=JSON.parse(JSON.stringify(GLOBAL.comision));if(GLOBAL.qr)d.qr=JSON.parse(JSON.stringify(GLOBAL.qr));return d;}
 function saveGlobal(){
   GLOBAL.t=Date.now();GLOBAL.hist=(GLOBAL.hist||[]).slice(-500);
   try{localStorage.setItem('mr_global',JSON.stringify(GLOBAL));}catch(e){}
@@ -801,7 +803,7 @@ function subscribeAll(){
     if(sn.exists){const l=(sn.data()||{}).list;if(Array.isArray(l)&&l.length){LAST['app/users']=JSON.stringify({list:l});USERS=fixUsers(clone(l));}}
     if(!sn.metadata.fromCache)markGot('app/users');onRemote();},fail);
   STORE.doc('app/global').onSnapshot(sn=>{
-    if(sn.exists){const g=sn.data()||{};LAST['app/global']=JSON.stringify(g);GLOBAL={mayor:g.mayor||{},comision:g.comision||null,hist:g.hist||[],t:g.t||0};
+    if(sn.exists){const g=sn.data()||{};LAST['app/global']=JSON.stringify(g);GLOBAL={mayor:g.mayor||{},comision:g.comision||null,qr:g.qr||null,hist:g.hist||[],t:g.t||0};
       try{localStorage.setItem('mr_global',JSON.stringify(GLOBAL));}catch(e){}
       SUCS.forEach(x=>{if(DBS[x])applyGlobal(DBS[x]);});if(db)applyGlobal(db);}
     onRemote();},fail);
@@ -910,7 +912,7 @@ const PRESETS_P={
   bodeguero:{n:'Bodeguero',p:['bodega','bmov','bvmov','bedit']},
   encargado:{n:'Encargado de local',p:['venta','anular','rend','mayor','mcta','bodega','bmov','bvmov','bedit','precios','com','phist']},
 };
-const VIEWP={venta:'venta',caja:'venta',rend:'rend',bres:'bodega',bmov:'bvmov',bcarga:'bmov',may:'mayor',mrend:'mayor',mcta:'mcta',binv:'binv',brec:'binv',btrans:'btrans',bmin:'bmin',bedit:'bedit',config:'precios',penv:'precios',clientes:'precios',pmay:'precios',com:'com',phist:'phist',users:'users',colores:'theme',inf:'inf'};
+const VIEWP={venta:'venta',caja:'venta',rend:'rend',bres:'bodega',bmov:'bvmov',bcarga:'bmov',may:'mayor',mrend:'mayor',mcta:'mcta',binv:'binv',brec:'binv',btrans:'btrans',bmin:'bmin',bedit:'bedit',config:'precios',penv:'precios',clientes:'precios',pmay:'precios',com:'com',qrc:'precios',phist:'phist',users:'users',colores:'theme',inf:'inf'};
 const curUser=()=>S.user?USERS.find(u=>u.u.toLowerCase()===String(S.user.u).toLowerCase()):null;
 const GLOBALP=['users','theme','inf'];
 const LOCALP=()=>ALLP.filter(k=>!GLOBALP.includes(k));
@@ -925,7 +927,7 @@ function can(k){const u=curUser();if(!u)return false;if(u.rol==='admin')return t
   return ((psOf(u)[S.user.suc])||[]).includes(k);}
 const canView=v=>!VIEWP[v]||can(VIEWP[v]);
 const userSucs=u=>(!u||u.rol==='admin')?SUCS:SUCS.filter(x=>(psOf(u)[x]||[]).length);
-const firstConf=()=>['config','penv','pmay','clientes','com','phist','users','colores'].find(v=>canView(v));
+const firstConf=()=>['config','penv','clientes','qrc','pmay','com','phist','users','colores'].find(v=>canView(v));
 function go(v){if(v==='config'&&!canView('config'))v=firstConf()||'home';if(!canView(v)){toast('No tienes permiso para esta sección. Pídelo a un administrador.','err');return;}S.view=v;render();window.scrollTo(0,0);}
 
 /* ================= LOGIN ================= */
@@ -1305,6 +1307,7 @@ function getRend(f){if(!RR()[f]){const o={obs:''};RKEYS.forEach(k=>o[k]=[]);RR()
 const vprice=s=>s==='H'?P('H15A').venta:P(s).venta;
 const vcil=s=>s==='H'?0:P(s).envase;
 function val(k,e){
+  if(k==='qr')return QRS.reduce((a,s)=>a+(e['q'+s]||0)*(e.pr&&e.pr[s]!=null?e.pr[s]:qrPrecio(s)),0);
   if(k==='vales')return VSIZES.reduce((a,s)=>a+(e['q'+s]||0)*(e.pr&&e.pr[s]!=null?e.pr[s]:vprice(s)),0);
   if(k==='valesCil')return VSIZES.reduce((a,s)=>a+(e['q'+s]||0)*vcil(s),0);
   return e.monto||0;
@@ -1314,6 +1317,7 @@ function desc(k,e){
   switch(k){
     case 'vales':return `${e.cliente?`<b>${esc(e.cliente)}</b> · `:''}${esc(e.tipo)}: ${q()}`;
     case 'valesCil':return q();
+    case 'qr':return QRS.filter(s=>e['q'+s]).map(s=>`${s} kg × ${e['q'+s]}`).join(' · ');
     case 'cheques':return `N° ${esc(e.nro)} ${esc(e.banco)}`;
     case 'transf':return `${esc(e.banco)} ${dmy(e.fecha)} ${esc(e.det)}`;
     case 'descuentos':case 'gastos':return `${esc(e.tipo)} ${esc(e.det)}`;
@@ -1334,7 +1338,7 @@ function calcDia(f){
   const cargos=g('cargos');
   const deber=venta+cargos+abonos-retiros;
   const abo=isM()?abonosR(f).reduce((a,x)=>a+x.monto,0):0;
-  const rendido=abo+g('efectivo')-g('vuelto')+g('vales')+g('valesCil')+g('cheques')+g('transf')+g('descuentos')+g('gastos')+g('transbank')+g('petroleo');
+  const rendido=abo+g('efectivo')-g('vuelto')+g('vales')+g('valesCil')+g('cheques')+g('transf')+g('descuentos')+g('gastos')+g('transbank')+g('petroleo')+g('qr');
   const com=isM()?(R.vales||[]).reduce((a,e)=>a+comVale(e),0):0;
   return {vs,venta,abonos,retiros,cargos,deber,rendido,com,saldo:deber-rendido-com};
 }
@@ -1362,7 +1366,7 @@ const sel=(k,f,opts)=>`<select data-k="${k}" data-f="${f}">${opts.map(o=>`<optio
 const RADSHORT={'De la compañía':'Compañía','Otras compañías':'Otras','Vale Digital':'Digital','Digital Otras compañías':'Digital otras'};
 const rad=(k,f,opts)=>`<div class="radios">${opts.map((o,i)=>`<label title="${o}"><input type="radio" name="r_${k}" data-k="${k}" data-f="${f}" value="${o}" ${i?'':'checked'}> ${k==='vales'?(RADSHORT[o]||o):o}</label>`).join('')}</div>`;
 const vq=k=>`<div class="vq">${VSIZES.map(s=>`<label>${s}<input data-k="${k}" data-f="q${s}" type="number" inputmode="numeric" placeholder="0"></label>`).join('')}</div>`;
-const RCAT={efectivo:'ing',vuelto:'ing',vales:'val',valesCil:'val',cheques:'ban',transf:'ban',transbank:'ban',descuentos:'res',gastos:'res',petroleo:'res',cargos:'car'};
+const RCAT={qr:'res',efectivo:'ing',vuelto:'ing',vales:'val',valesCil:'val',cheques:'ban',transf:'ban',transbank:'ban',descuentos:'res',gastos:'res',petroleo:'res',cargos:'car'};
 const multiR=()=>!!S.rfecha2&&S.rfecha2!==S.rfecha;
 const pastLock=f=>!!S.user&&!can('*admin')&&String(f||'').slice(0,10)<today();
 const rLock=()=>pastLock(S.rfecha);
@@ -1404,7 +1408,8 @@ function addR(k){
     if(el.type==='radio'){if(el.checked)o[el.dataset.f]=el.value;}
     else o[el.dataset.f]=el.type==='number'?num(el.value):el.value.trim();
   });
-  if(k==='vales'||k==='valesCil'){if(!VSIZES.some(s=>o['q'+s]))return toast('Ingresa una cantidad','err');}
+  if(k==='qr'){if(!QRS.some(s=>o['q'+s]))return toast('Ingresa cuántos descuentos QR hubo','err');if(!QRS.some(s=>o['q'+s]&&qrPrecio(s)))return toast('Falta configurar el valor del descuento QR en Configuración','err');o.pr={};QRS.forEach(s=>o.pr[s]=qrPrecio(s));}
+  else if(k==='vales'||k==='valesCil'){if(!VSIZES.some(s=>o['q'+s]))return toast('Ingresa una cantidad','err');}
   else if(!o.monto)return toast('Ingresa un monto','err');
   if(k==='vales'&&isM()){o.pr={};VSIZES.forEach(s=>{if(o['q'+s])o.pr[s]=mrPrecio(P(s==='H'?'H15A':s));});}
   if(k==='vales'){o.com=isM()?comVale({...o,com:undefined}):0;}
@@ -1476,6 +1481,7 @@ function vRend(){
       ${sec('valesCil','VALES (Sólo Cilindro)',vq('valesCil'),'Guardar')}
       ${sec('cheques','CHEQUE',inp('cheques','monto','Monto $')+inp('cheques','nro','N° cheque',0,'text')+sel('cheques','banco',['Banco...',...BANCOS]))}
       ${sec('transf','TRANSFERENCIA ELECTRÓNICA',inp('transf','monto','Monto $')+sel('transf','banco',['Banco...',...BANCOS])+inp('transf','fecha','',0,'date')+inp('transf','det','Detalle',1,'text'))}
+      ${MY?'':sec('qr','DESCUENTO QR',`<div class="vq">${QRS.map(s=>`<label>${s} kg<input data-k="qr" data-f="q${s}" type="number" inputmode="numeric" placeholder="0"></label>`).join('')}</div><span class="hint" style="white-space:nowrap">${QRS.map(s=>`${s} kg: ${money(qrPrecio(s))}`).join(' · ')} c/u</span>`,'Agregar')}
       ${sec('descuentos','DESCUENTOS',sel('descuentos','tipo',['Tipo...','QR','Convenio','Promoción','Cliente frecuente','Otro'])+inp('descuentos','monto','Monto $')+inp('descuentos','det','Detalle',1,'text'))}
       ${sec('gastos','GASTOS',sel('gastos','tipo',['Tipo...','Combustible','Alimentación','Mantención','Peaje','Otro'])+inp('gastos','monto','Monto $')+inp('gastos','det','Detalle',1,'text'))}
       ${sec('transbank','TRANSBANK',rad('transbank','tipo',['Débito','Crédito'])+inp('transbank','monto','Monto $')+inp('transbank','nro','N° voucher',0,'text')+inp('transbank','fecha','',0,'date'))}
@@ -1523,7 +1529,7 @@ function vColores(){
       <tr class="sec"><td class="l">BODEGA</td><td class="n big">50</td><td class="n big">106</td><td class="n big">100</td></tr></table></div>
     <div style="text-align:center;display:flex;gap:10px;justify-content:center"><button class="btn primary" style="padding:10px 26px" onclick="saveTheme()">Guardar theme</button><button class="btn" onclick="resetTheme()">Restablecer theme original</button></div>`);
 }
-const CONF_SIDE=[['config','tag','Precio Local'],['penv','cyl','Precio Envases'],['pmay','tag','Precios Mayoristas'],['clientes','users','Clientes'],['com','cash','Comisión Vales'],['phist','list','Historial de Precios'],['users','users','Usuarios'],['colores','palette','Theme']];
+const CONF_SIDE=[['config','tag','Precio Local'],['penv','cyl','Precio Envases'],['clientes','users','Clientes'],['qrc','tag','Descuento QR'],['pmay','tag','Precios Mayoristas'],['com','cash','Comisión Vales'],['phist','list','Historial de Precios'],['users','users','Usuarios'],['colores','palette','Theme']];
 const conf=c=>frame('Configuración','home',CONF_SIDE,c);
 function vConfig(){
   return conf(`<div class="sect">PRECIO LOCAL</div>
@@ -1558,6 +1564,24 @@ function vPHist(){
 const VTIPOS=['De la compañía','Otras compañías','Vale Digital','Digital Otras compañías'];
 function comVale(e){if(typeof e.com==='number')return e.com;const c=db.comision[e.tipo]||{};return VSIZES.reduce((a,s)=>a+(e['q'+s]||0)*(c[s]||0),0);}
 function comRango(){if(!isM())return 0;let t=0;rDates().forEach(f=>(RR()[f].vales||[]).forEach(e=>t+=comVale(e)));return t;}
+function vQr(){
+  const q=db.qr||{};
+  return conf(`<div class="sect">DESCUENTO QR</div>
+    <p class="hint" style="margin:8px 0 12px;text-align:center">Escribe cuánto se descuenta por cada venta pagada con QR, según el cilindro. En la <b>Rendición local</b> solo se ingresa cuántos descuentos hubo y el monto se calcula solo. Es igual para todas las sucursales.</p>
+    <div class="tw blk"><table><tr><th class="l">CILINDRO</th><th>DESCUENTO POR UNIDAD</th></tr>
+      ${QRS.map(s=>`<tr><td class="l"><b>Cilindro ${s} kg</b></td><td>$ <input class="ei" style="width:110px;text-align:right" type="number" min="0" inputmode="numeric" data-qr="${s}" value="${q[s]||''}" placeholder="0"></td></tr>`).join('')}
+    </table></div>
+    <div style="text-align:center"><button class="btn primary" style="padding:10px 26px" onclick="saveQr()">Guardar descuento QR</button></div>
+    <p class="hint" style="margin-top:14px;text-align:center">Ejemplo: si el descuento QR del 15 kg es $2.000 y hubo 3, en la rendición se descuentan $6.000.</p>`);
+}
+function saveQr(){
+  let n=0;const q=db.qr=db.qr||{};
+  $$('[data-qr]').forEach(el=>{const sz=el.dataset.qr,v=num(el.value);
+    if((q[sz]||0)!==v){const h={fecha:today(),hora:hora(),usuario:S.user.nombre,prod:sz+' kg',campo:'Descuento QR',antes:q[sz]||0,despues:v};db.phist.push(h);(GLOBAL.hist=GLOBAL.hist||[]).push({...h,suc:S.user.suc});q[sz]=v;n++;}});
+  if(!n)return toast('No hay cambios','err');
+  GLOBAL.qr=JSON.parse(JSON.stringify(q));
+  save();saveGlobal();toast('Descuento QR guardado en todas las sucursales ✔');render();
+}
 function vCom(){
   return conf(`<div class="sect">COMISIÓN DE VALES</div>
     <p class="hint" style="margin:8px 0 12px;text-align:center">Escribe cuánto se le abona al cliente por cada vale, según el tipo de vale y el cilindro. Solo se aplica en la <b>Rendición Mayorista</b>: es un beneficio para el cliente. Se calcula sola al grabar un vale y se descuenta de su saldo (queda a favor en su cuenta). En la rendición local no hay comisión.</p>
@@ -2467,7 +2491,7 @@ function vInf(){
 }
 
 /* ================= RENDER ================= */
-const VIEWS={login:vLogin,home:vHome,caja:vCaja,venta:vVenta,rend:vRend,may:vMay,mrend:vRend,mcta:vMRend,config:vConfig,com:vCom,colores:vColores,inf:vInf,phist:vPHist,users:vUsers,
+const VIEWS={qrc:vQr,login:vLogin,home:vHome,caja:vCaja,venta:vVenta,rend:vRend,may:vMay,mrend:vRend,mcta:vMRend,config:vConfig,com:vCom,colores:vColores,inf:vInf,phist:vPHist,users:vUsers,
   penv:vPEnv,clientes:vClientes,pmay:vPMay,bres:vBRes,bcarga:vBCarga,bmov:vBMov,bedit:vBEdit};
 function render(){
   if(S.user&&!READY){$('#app').innerHTML=`<div class="login-wrap"><div class="login" style="text-align:center"><div class="lbrand" style="justify-content:center"><span class="sq">MR</span><div style="text-align:left"><b>MR</b><small>Sistema Local</small></div></div><p>Cargando datos compartidos…</p></div></div>`;return;}

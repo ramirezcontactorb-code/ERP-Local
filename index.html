@@ -290,6 +290,12 @@ textarea{width:100%;min-height:100px;resize:vertical}
 .mm-v .h .sp{flex:1}
 .mm-v .ib{width:38px;height:38px}
 .mm-v .q{margin-top:6px}
+/* ---- detalle de movimientos ---- */
+.mvd{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;margin:2px 0}
+.mvd .mvt{font-size:12px;font-weight:700;margin-right:2px}
+.mvd .mvt small{font-weight:500;color:var(--tx2)}
+.mvd .mvt.in{color:var(--ok)}.mvd .mvt.out{color:var(--red)}
+.mvd .chip{font-weight:600;margin:0}
 /* ---- respaldo base de datos ---- */
 .dbbox{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:22px;padding:14px 16px;border:1px dashed var(--b3);border-radius:10px;background:var(--b0)}
 .dbbox .hint{margin-top:4px;max-width:640px}
@@ -1999,13 +2005,21 @@ function logB(label,d,extra={}){
 }
 function dChips(d){
   if(!d)return '';
-  const c=(t,n)=>`<span class="chip ${n<0?'neg':'pos'}">${t} ${n>0?'+':''}${n}</span>`;
-  let h='';
-  for(const id in d.stock)h+=c('Bodega '+colLbl(P(id)),d.stock[id]);
-  for(const id in d.carga)h+=c('Chofer '+colLbl(P(id)),d.carga[id]);
-  for(const g in d.vac)h+=c('Vacío '+g,d.vac[g]);
-  for(const g in d.pres)h+=c('Prestado '+g,d.pres[g]);
-  return h;
+  const sg={};for(const id in d.stock){const g=grp(id);sg[g]=(sg[g]||0)+d.stock[id];}
+  const canje=g=>d.vac&&d.vac[g]!=null&&sg[g]&&d.vac[g]===-sg[g];
+  const L={inC:[],outC:[],in:[],out:[],vin:[],vout:[],cin:[],cout:[],pin:[],pout:[]};
+  const ch=(n,t)=>`<span class="chip">${Math.abs(n)} × ${t}</span>`;
+  for(const id in d.stock){const n=d.stock[id];if(!n)continue;const c=canje(grp(id));
+    (n>0?(c?L.inC:L.in):(c?L.outC:L.out)).push(ch(n,colLbl(P(id))));}
+  for(const g in d.vac){const n=d.vac[g];if(!n||canje(g))continue;(n>0?L.vin:L.vout).push(ch(n,g));}
+  for(const id in d.carga){const n=d.carga[id];if(n)(n>0?L.cin:L.cout).push(ch(n,colLbl(P(id))));}
+  for(const g in d.pres){const n=d.pres[g];if(n)(n>0?L.pin:L.pout).push(ch(n,g));}
+  const row=(arr,cls,t)=>arr.length?`<div class="mvd"><span class="mvt ${cls}">${t}</span>${arr.join('')}</div>`:'';
+  return row(L.inC,'in','▲ Entran llenos')+row(L.outC,'out','▼ Salen llenos')
+    +row(L.in,'in','▲ Entran llenos')+row(L.out,'out','▼ Salen llenos')
+    +row(L.vin,'in','▲ Entran vacíos')+row(L.vout,'out','▼ Salen vacíos')
+    +row(L.cin,'in','▲ Chofer recibe')+row(L.cout,'out','▼ Chofer devuelve')
+    +row(L.pin,'in','▲ Prestados')+row(L.pout,'out','▼ Devueltos');
 }
 function stockMsg(){return '';const l=lowList();return l.length?`<div class="alert">${ic('alert')}Bajo stock mínimo: ${l.map(p=>`${colLbl(p)} (${p.stock}/${db.min[p.id]})`).join(', ')}</div>`:'';}
 
